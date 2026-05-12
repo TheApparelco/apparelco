@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f0f">
+<title>The Apparel Co</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0f0f0f;--surface:#1a1a1a;--surface2:#222;--surface3:#2a2a2a;
+  --border:#2e2e2e;--border2:#3a3a3a;
+  --text:#f0ede8;--text2:#9a9690;--text3:#5a5754;
+  --accent:#c8b89a;--accent2:#8a7a65;
+  --green:#6dbf85;--amber:#c8963a;--red:#e88;
+  --radius:10px;--radius-sm:6px;--radius-lg:16px;
+  --font-display:'DM Serif Display',serif;--font-body:'DM Sans',sans-serif;
+  --sidebar:240px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-body);font-weight:300;font-size:14px;line-height:1.5;overflow:hidden}
+
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:44px 1fr;height:100vh;height:100dvh}
+.titlebar{grid-column:1/-1;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;-webkit-app-region:drag}
+.titlebar-logo{font-family:var(--font-display);font-size:16px;color:var(--accent);letter-spacing:0.02em}
+.titlebar-right{margin-left:auto;display:flex;align-items:center;gap:10px;-webkit-app-region:no-drag}
+.sync-pill{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);padding:4px 10px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;transition:all 0.15s}
+.sync-pill:hover{border-color:var(--border2);color:var(--text2)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);transition:background 0.3s}
+
+/* ── SIDEBAR ── */
+.sidebar{background:var(--surface);border-right:0.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-section{padding:6px}
+.sidebar-label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);padding:10px 10px 4px;font-weight:500;display:flex;align-items:center;justify-content:space-between}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text2);transition:all 0.15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface3);color:var(--accent)}
+.nav-item svg{width:15px;height:15px;stroke-width:1.5;flex-shrink:0}
+.sidebar-divider{border:none;border-top:0.5px solid var(--border);margin:4px 6px}
+.client-list-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 6px 8px}
+.client-nav{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text2);transition:all 0.15s}
+.client-nav:hover{background:var(--surface2);color:var(--text)}
+.client-nav.active{background:var(--surface3);color:var(--text)}
+.avatar-xs{width:22px;height:22px;border-radius:50%;background:var(--surface3);border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--accent);flex-shrink:0;font-family:var(--font-display)}
+.badge-xs{font-size:9px;padding:1px 6px;border-radius:10px;margin-left:auto;flex-shrink:0}
+.badge-active{background:rgba(109,191,133,0.15);color:var(--green);border:0.5px solid rgba(109,191,133,0.25)}
+.badge-sample{background:rgba(200,150,58,0.15);color:var(--amber);border:0.5px solid rgba(200,150,58,0.25)}
+.badge-done{background:var(--surface3);color:var(--text3);border:0.5px solid var(--border)}
+
+/* ── MAIN ── */
+.main{overflow:hidden;display:flex;flex-direction:column}
+.panel{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 28px 40px}
+.panel.active{display:flex;flex-direction:column}
+.panel-title{font-family:var(--font-display);font-size:24px;margin-bottom:18px;flex-shrink:0}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden}
+.card-header{padding:12px 16px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);font-weight:500}
+.card-body{padding:16px}
+.card-tap{cursor:pointer;transition:background 0.12s}
+.card-tap:hover{background:var(--surface2)}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:16px;flex-shrink:0}
+.tab{padding:7px 14px;font-size:13px;cursor:pointer;border:none;background:none;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-0.5px;transition:all 0.15s;font-family:var(--font-body)}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── FORMS ── */
+.field{margin-bottom:12px}.field:last-child{margin-bottom:0}
+label{display:block;font-size:11px;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:5px;font-weight:500}
+input,select,textarea{width:100%;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-body);font-size:14px;font-weight:300;padding:9px 11px;outline:none;transition:border-color 0.15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent2)}
+textarea{resize:vertical;min-height:65px}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9690' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;-webkit-appearance:none;appearance:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--radius-sm);font-family:var(--font-body);font-size:13px;font-weight:400;cursor:pointer;border:0.5px solid var(--border2);background:var(--surface2);color:var(--text);transition:all 0.15s;white-space:nowrap}
+.btn:hover{background:var(--surface3)}
+.btn:active{opacity:0.8}
+.btn-primary{background:var(--accent);color:#0f0f0f;border-color:var(--accent);font-weight:500}
+.btn-primary:hover{opacity:0.9;background:var(--accent)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border-color:transparent;color:var(--text2)}
+.btn-ghost:hover{background:var(--surface2);border-color:transparent}
+.btn-danger{border-color:rgba(232,136,136,0.3);color:var(--red)}
+.btn-danger:hover{background:rgba(232,136,136,0.1)}
+.btn-block{width:100%;justify-content:center}
+
+/* ── DETAIL ROWS ── */
+.detail-row{display:flex;gap:14px;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.detail-row:last-child{border-bottom:none}
+.detail-key{color:var(--text3);width:110px;flex-shrink:0;padding-top:1px;font-size:12px}
+.detail-val{color:var(--text);flex:1;word-break:break-word}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--surface3);border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:16px;color:var(--accent);flex-shrink:0}
+
+/* ── CHECKLIST ── */
+.phase-label{font-size:10px;letter-spacing:0.09em;text-transform:uppercase;color:var(--accent2);margin-bottom:6px;font-weight:500;padding:0 2px}
+.check-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)}
+.check-row:last-child{border-bottom:none}
+.check-box{width:17px;height:17px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s}
+.check-box.on{background:var(--accent);border-color:var(--accent)}
+.check-box.on::after{content:'';width:5px;height:5px;background:#0f0f0f;border-radius:50%}
+.check-text{flex:1;font-size:13px;cursor:pointer;line-height:1.4}
+.check-text.done{text-decoration:line-through;color:var(--text3)}
+.step-files{padding:4px 0 8px 27px;display:flex;flex-wrap:wrap;gap:5px}
+.file-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:3px 9px;font-size:11px;cursor:pointer;max-width:200px}
+.file-chip:hover{border-color:var(--accent2)}
+.file-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-chip-del{color:var(--text3);cursor:pointer;flex-shrink:0;padding:0 2px;line-height:1}
+.file-chip-del:hover{color:var(--red)}
+
+/* ── PRICING ── */
+.style-block{background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;position:relative}
+.style-block-title{font-size:11px;color:var(--accent2);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px;font-weight:500}
+.remove-btn{position:absolute;top:10px;right:10px;background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:2px 6px;line-height:1}
+.remove-btn:hover{color:var(--red)}
+.price-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.price-row:last-child{border-bottom:none}
+.price-row.grand{font-size:15px;font-weight:500;color:var(--accent)}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stat{background:var(--surface2);border-radius:var(--radius-sm);padding:11px;text-align:center}
+.stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px}
+.stat-val{font-size:18px;font-weight:500;color:var(--accent)}
+
+/* ── PHOTOS ── */
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px}
+.photo-thumb{aspect-ratio:1;border-radius:var(--radius-sm);overflow:hidden;background:var(--surface2);position:relative;cursor:pointer;border:0.5px solid var(--border)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-overlay{position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;gap:5px;transition:background 0.15s}
+.photo-thumb:hover .photo-overlay{background:rgba(0,0,0,0.55)}
+.photo-action{opacity:0;background:rgba(15,15,15,0.85);border:none;border-radius:4px;color:#fff;font-size:11px;cursor:pointer;padding:3px 7px;transition:opacity 0.15s}
+.photo-thumb:hover .photo-action{opacity:1}
+.photo-add{aspect-ratio:1;border-radius:var(--radius-sm);background:var(--surface2);border:1px dashed var(--border2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);transition:all 0.15s;gap:3px;font-size:11px}
+.photo-add:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* ── FILES ── */
+.file-item{display:flex;align-items:center;gap:9px;background:var(--surface2);border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:9px 11px;cursor:pointer;transition:border-color 0.15s;margin-bottom:5px}
+.file-item:hover{border-color:var(--accent2)}
+.file-icon{font-size:17px;flex-shrink:0}
+.file-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.file-size{font-size:11px;color:var(--text3);flex-shrink:0}
+.file-del{background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:2px 5px;flex-shrink:0}
+.file-del:hover{color:var(--red)}
+.upload-zone{border:1px dashed var(--border2);border-radius:var(--radius-sm);padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;margin-bottom:10px}
+.upload-zone:hover{border-color:var(--accent2);background:var(--surface2)}
+
+/* ── INVOICE ── */
+.invoice-doc{background:#fff;color:#111;border-radius:var(--radius-lg);padding:36px;max-width:680px;font-family:'DM Sans',sans-serif}
+.inv-logo{font-family:'DM Serif Display',serif;font-size:20px;color:#111;margin-bottom:3px}
+.inv-address{font-size:12px;color:#666;line-height:1.7}
+.inv-number{font-size:26px;font-weight:300;color:#111;margin-bottom:3px}
+.inv-meta{font-size:12px;color:#666}
+.inv-hr{border:none;border-top:0.5px solid #ddd;margin:16px 0}
+.inv-bill-label{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px}
+.inv-bill-name{font-size:15px;font-weight:500;color:#111}
+.inv-tbl{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
+.inv-tbl th{text-align:left;padding:7px 5px;color:#999;font-weight:400;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;border-bottom:0.5px solid #ddd}
+.inv-tbl td{padding:8px 5px;border-bottom:0.5px solid #eee;color:#111;vertical-align:top}
+.inv-tbl tr:last-child td{border-bottom:none}
+.inv-total-line{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#666}
+.inv-total-line.grand{font-size:16px;font-weight:500;color:#111;border-top:0.5px solid #ddd;padding-top:9px;margin-top:5px}
+.inv-footer{margin-top:20px;font-size:11px;color:#999;line-height:1.7;border-top:0.5px solid #eee;padding-top:12px}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:999;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:22px;width:540px;max-height:88vh;overflow-y:auto;max-width:92vw}
+.modal-title{font-family:var(--font-display);font-size:19px;margin-bottom:16px}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+
+/* ── SLIDESHOW ── */
+.slideshow{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9999;flex-direction:column;align-items:center;justify-content:center}
+.slideshow.open{display:flex}
+.slideshow img{max-width:88vw;max-height:78vh;object-fit:contain;border-radius:var(--radius-sm)}
+.slideshow-close{position:absolute;top:18px;right:18px;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:18px;cursor:pointer;padding:7px 11px;border-radius:var(--radius-sm)}
+.slideshow-nav{display:flex;gap:10px;margin-top:14px}
+.slideshow-nav button{background:rgba(255,255,255,0.1);border:none;color:#fff;padding:7px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px}
+.slideshow-caption{font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px}
+
+/* ── CONNECT SCREEN ── */
+.connect-screen{position:fixed;inset:0;background:var(--bg);z-index:8888;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px;text-align:center}
+.connect-logo{font-family:var(--font-display);font-size:32px;color:var(--accent);margin-bottom:8px}
+.connect-sub{color:var(--text3);font-size:14px;line-height:1.7;max-width:380px}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:48px 20px;color:var(--text3)}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:0.35}
+
+/* ── BACKUP TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;z-index:9000;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transform:translateY(80px);opacity:0;transition:all 0.3s}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ── MOBILE ── */
+@media(max-width:640px){
+  .app{grid-template-columns:1fr;grid-template-rows:44px auto 1fr 52px}
+  .sidebar{display:none}
+  .panel{padding:16px 14px 32px}
+  .grid4{grid-template-columns:1fr 1fr}
+}
+
+@media print{
+  .app,.sidebar,.titlebar,.tabs,.btn,.overlay,.slideshow,.connect-screen,.toast{display:none!important}
+  .invoice-doc{display:block!important;padding:0;margin:0;border-radius:0;box-shadow:none;max-width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- CONNECT SCREEN -->
+<div class="connect-screen" id="connect-screen">
+  <div class="connect-logo">The Apparel Co</div>
+  <div style="font-size:16px;color:var(--text2);margin-bottom:4px">Production Manager</div>
+  <div class="connect-sub">Connect your Google Drive to keep all client data, files and workflow in sync across all your devices.</div>
+  <button class="btn btn-primary" style="font-size:15px;padding:12px 28px;margin-top:8px" onclick="startGoogleAuth()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    Connect Google Drive
+  </button>
+  <div id="connect-status" style="font-size:12px;color:var(--text3);min-height:20px"></div>
+  <button class="btn btn-ghost btn-sm" onclick="skipConnect()" style="margin-top:4px">Use without Drive (local only)</button>
+</div>
+
+<!-- APP -->
+<div class="app" id="app" style="display:none">
+  <!-- TITLEBAR -->
+  <div class="titlebar">
+    <div class="titlebar-logo">The Apparel Co</div>
+    <div class="titlebar-right">
+      <div class="sync-pill" onclick="manualSync()" id="sync-pill">
+        <div class="sync-dot" id="sync-dot"></div>
+        <span id="sync-label">—</span>
+      </div>
+      <button class="btn btn-sm" onclick="downloadBackup()" title="Download full backup">⬇ Backup</button>
+      <button class="btn btn-sm btn-ghost" onclick="showConnectScreen()" title="Drive settings">☁</button>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Menu</div>
+      <div class="nav-item active" onclick="showPanel('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </div>
+      <div class="nav-item" onclick="showPanel('pricing')" id="nav-pricing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Pricing
+      </div>
+      <div class="nav-item" onclick="showPanel('invoice')" id="nav-invoice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Invoice
+      </div>
+    </div>
+    <hr class="sidebar-divider">
+    <div class="sidebar-label">
+      Clients
+      <button class="btn btn-xs btn-ghost" onclick="openClientModal()" style="padding:1px 6px;font-size:15px;line-height:1">+</button>
+    </div>
+    <div class="client-list-scroll" id="sidebar-clients"></div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="panel-dashboard">
+      <div id="dashboard-content"></div>
+    </div>
+
+    <!-- CLIENT -->
+    <div class="panel" id="panel-client">
+      <div id="client-content"></div>
+    </div>
+
+    <!-- PRICING -->
+    <div class="panel" id="panel-pricing">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-shrink:0">
+        <div class="panel-title" style="margin:0">Pricing</div>
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="grid4">
+          <div class="field"><label>Client</label><select id="p-client" onchange="onPriceClient()"><option value="">— select —</option></select></div>
+          <div class="field"><label>Currency</label><select id="p-cur" onchange="calcPrice()"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
+          <div class="field"><label>IVA (%)</label><input id="p-iva" type="number" value="23" oninput="calcPrice()"></div>
+          <div class="field"><label>FX fee (%)</label><input id="p-fx" type="number" value="2" oninput="calcPrice()"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Default commission (%)</label><input id="p-comm" type="number" value="25" oninput="calcPrice()"></div>
+          <div class="field"><label>Shipping (€)</label><input id="p-ship" type="number" value="200" oninput="calcPrice()"></div>
+        </div>
+      </div></div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Garments / styles</span><button class="btn btn-sm" onclick="addGarment()">+ Add style</button></div>
+        <div class="card-body" style="padding-top:8px"><div id="garments-wrap"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Samples</span><button class="btn btn-sm" onclick="addSample()">+ Add sample</button></div>
+        <div class="card-body" style="padding-top:8px">
+          <div id="samples-wrap"></div>
+          <div id="samples-empty" style="font-size:13px;color:var(--text3)">No samples added</div>
+        </div>
+      </div>
+
+      <div class="card"><div class="card-body">
+        <div id="breakdown"></div>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-label">Production</div><div class="stat-val" id="s-prod">—</div></div>
+          <div class="stat"><div class="stat-label">Samples</div><div class="stat-val" id="s-samp">—</div></div>
+          <div class="stat"><div class="stat-label">Grand total</div><div class="stat-val" id="s-grand">—</div></div>
+        </div>
+        <div style="margin-top:14px"><button class="btn btn-primary" onclick="pushToInvoice()">Generate invoice →</button></div>
+      </div></div>
+    </div>
+
+    <!-- INVOICE -->
+    <div class="panel" id="panel-invoice">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-shrink:0">
+        <div class="panel-title" style="margin:0">Invoice</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="window.print()">🖨 Print / PDF</button>
+        </div>
+      </div>
+      <div class="card"><div class="card-body">
+        <div class="grid4">
+          <div class="field"><label>Invoice #</label><input id="i-num" value="TAC-001" oninput="buildInvoice()"></div>
+          <div class="field"><label>Date</label><input id="i-date" type="date" oninput="buildInvoice()"></div>
+          <div class="field"><label>Due (days)</label><input id="i-due" type="number" value="14" oninput="buildInvoice()"></div>
+          <div class="field"><label>Currency</label><select id="i-cur" onchange="buildInvoice()"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Client / brand</label><input id="i-client" oninput="buildInvoice()"></div>
+          <div class="field"><label>Payment terms</label><input id="i-terms" value="50% deposit · 50% before dispatch" oninput="buildInvoice()"></div>
+        </div>
+      </div></div>
+      <div class="invoice-doc" id="invoice-preview"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT MODAL -->
+<div class="overlay" id="client-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">New client</div>
+    <div class="grid2">
+      <div class="field"><label>Brand name *</label><input id="f-brand" placeholder="e.g. Studio Mara"></div>
+      <div class="field"><label>Contact name</label><input id="f-contact"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Email</label><input id="f-email" type="email"></div>
+      <div class="field"><label>WhatsApp</label><input id="f-wa" placeholder="+351..."></div>
+    </div>
+    <div class="field"><label>Address</label><textarea id="f-address" style="min-height:55px"></textarea></div>
+    <div class="grid3">
+      <div class="field"><label>Country</label><input id="f-country"></div>
+      <div class="field"><label>VAT</label><input id="f-vat"></div>
+      <div class="field"><label>Currency</label><select id="f-cur"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
+    </div>
+    <div class="field"><label>Garment types</label><input id="f-garments" placeholder="e.g. hoodies, tees"></div>
+    <div class="field"><label>Notes</label><textarea id="f-notes" style="min-height:55px"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('client-modal')">Cancel</button>
+      <button class="btn btn-primary" id="modal-save-btn" onclick="saveClient()">Save client</button>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDESHOW -->
+<div class="slideshow" id="slideshow">
+  <button class="slideshow-close" onclick="closeSlideshow()">✕</button>
+  <img id="slideshow-img" src="" alt="">
+  <div class="slideshow-nav">
+    <button onclick="slidePrev()">← Prev</button>
+    <button onclick="slideNext()">Next →</button>
+  </div>
+  <div class="slideshow-caption" id="slideshow-caption"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- FILE INPUTS -->
+<input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFiles(event)">
+<input type="file" id="doc-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ai,.eps,.png,.jpg,.jpeg,.zip" multiple style="display:none" onchange="handleDocFiles(event)">
+<input type="file" id="step-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" multiple style="display:none" onchange="handleStepFiles(event)">
+
+<script>
+// ════════════════════════════════════════════════════════
+// GOOGLE DRIVE AUTH
+// ════════════════════════════════════════════════════════
+const CLIENT_ID = '651886300594-3bqsob0sq52ch7afprnkmuk5qfk1861d.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+const FOLDER_NAME = 'TheApparelCo';
+let accessToken = null;
+let folderId = null;
+let fileIndex = {}; // name -> {id, modifiedTime}
+let driveConnected = false;
+
+function startGoogleAuth() {
+  const state = Math.random().toString(36).slice(2);
+  sessionStorage.setItem('oauth_state', state);
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: location.origin + location.pathname,
+    response_type: 'token',
+    scope: SCOPES,
+    state,
+    include_granted_scopes: 'true'
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/auth?' + params;
+}
+
+function handleOAuthCallback() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const token = hash.get('access_token');
+  const state = hash.get('state');
+  if (token && state === sessionStorage.getItem('oauth_state')) {
+    accessToken = token;
+    const expiresIn = parseInt(hash.get('expires_in') || '3600');
+    localStorage.setItem('gd_token', token);
+    localStorage.setItem('gd_token_expiry', Date.now() + expiresIn * 1000);
+    history.replaceState(null, '', location.pathname);
+    return true;
+  }
+  return false;
+}
+
+function loadStoredToken() {
+  const token = localStorage.getItem('gd_token');
+  const expiry = parseInt(localStorage.getItem('gd_token_expiry') || '0');
+  if (token && Date.now() < expiry - 60000) {
+    accessToken = token;
+    return true;
+  }
+  return false;
+}
+
+function skipConnect() {
+  driveConnected = false;
+  showApp();
+}
+
+function showConnectScreen() {
+  document.getElementById('connect-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ════════════════════════════════════════════════════════
+// DRIVE API
+// ════════════════════════════════════════════════════════
+async function driveGet(path) {
+  const r = await fetch('https://www.googleapis.com/drive/v3/' + path, {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  return r.json();
+}
+
+async function drivePost(path, body, isUpload) {
+  const base = isUpload ? 'https://www.googleapis.com/upload/drive/v3/' : 'https://www.googleapis.com/drive/v3/';
+  const r = await fetch(base + path, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+async function drivePatch(fileId, body) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+async function ensureFolder() {
+  if (folderId) return folderId;
+  const res = await driveGet(`files?q=name='${FOLDER_NAME}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
+  if (res.files && res.files.length > 0) { folderId = res.files[0].id; return folderId; }
+  const folder = await drivePost('files', { name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' });
+  folderId = folder.id;
+  return folderId;
+}
+
+async function buildFileIndex() {
+  const fid = await ensureFolder();
+  fileIndex = {};
+  let pageToken = '';
+  do {
+    const res = await driveGet(`files?q='${fid}'+in+parents+and+trashed=false&fields=files(id,name,modifiedTime)&pageSize=1000${pageToken?'&pageToken='+pageToken:''}`);
+    (res.files||[]).forEach(f => fileIndex[f.name] = { id: f.id, modifiedTime: f.modifiedTime });
+    pageToken = res.nextPageToken || '';
+  } while (pageToken);
+}
+
+async function driveUploadJSON(filename, data) {
+  if (!accessToken) return;
+  const fid = await ensureFolder();
+  const content = JSON.stringify(data);
+  const existing = fileIndex[filename];
+  if (existing) {
+    // Update content
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: content
+    });
+  } else {
+    // Create with multipart
+    const meta = JSON.stringify({ name: filename, parents: [fid] });
+    const boundary = 'tac_b_' + Date.now();
+    const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const j = await res.json();
+    if (j.id) fileIndex[filename] = { id: j.id, modifiedTime: new Date().toISOString() };
+  }
+}
+
+async function driveUploadBinary(filename, dataUrl) {
+  if (!accessToken) return;
+  const fid = await ensureFolder();
+  const base64 = dataUrl.split(',')[1];
+  const mimeType = dataUrl.split(';')[0].split(':')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const existing = fileIndex[filename];
+  if (existing) {
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': mimeType },
+      body: bytes
+    });
+  } else {
+    const meta = JSON.stringify({ name: filename, parents: [fid] });
+    const metaBytes = new TextEncoder().encode(meta);
+    const boundary = 'tac_b_' + Date.now();
+    const sep = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json\r\n\r\n`);
+    const mid = new TextEncoder().encode(`\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`);
+    const end = new TextEncoder().encode(`\r\n--${boundary}--`);
+    const body = new Uint8Array(sep.length + metaBytes.length + mid.length + bytes.length + end.length);
+    let offset = 0;
+    [sep, metaBytes, mid, bytes, end].forEach(b => { body.set(b, offset); offset += b.length; });
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const j = await res.json();
+    if (j.id) fileIndex[filename] = { id: j.id, modifiedTime: new Date().toISOString() };
+  }
+}
+
+async function driveDownloadJSON(filename) {
+  const entry = fileIndex[filename];
+  if (!entry) return null;
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${entry.id}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  return r.json();
+}
+
+async function driveDownloadDataUrl(filename) {
+  const entry = fileIndex[filename];
+  if (!entry) return null;
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${entry.id}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  const blob = await r.blob();
+  return new Promise(res => { const fr = new FileReader(); fr.onload = e => res(e.target.result); fr.readAsDataURL(blob); });
+}
+
+async function driveDeleteFile(filename) {
+  const entry = fileIndex[filename];
+  if (!entry) return;
+  await fetch(`https://www.googleapis.com/drive/v3/files/${entry.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  delete fileIndex[filename];
+}
+
+// ════════════════════════════════════════════════════════
+// LOCAL STORAGE FALLBACK (when Drive not connected)
+// ════════════════════════════════════════════════════════
+function lsGet(key, def) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } }
+function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) { console.warn('LS full', e); } }
+
+// ════════════════════════════════════════════════════════
+// DATA LAYER — abstracts Drive vs local
+// ════════════════════════════════════════════════════════
+let clients = [];
+let syncQueue = []; // filenames queued when offline
+
+async function loadAllClients() {
+  if (!driveConnected) { clients = lsGet('tac_clients', []); return; }
+  const manifest = await driveDownloadJSON('manifest.json');
+  if (!manifest || !manifest.clients) { clients = lsGet('tac_clients', []); return; }
+  const loaded = [];
+  for (const id of manifest.clients) {
+    const c = await driveDownloadJSON(`client_${id}.json`);
+    if (c) loaded.push(c);
+  }
+  clients = loaded.sort((a,b) => (a.brand||'').localeCompare(b.brand||''));
+  lsSet('tac_clients', clients); // local cache
+}
+
+async function saveClientData(client) {
+  // Always save locally first
+  const existing = clients.findIndex(x => x.id === client.id);
+  if (existing >= 0) clients[existing] = client; else clients.push(client);
+  lsSet('tac_clients', clients);
+  // Then Drive
+  if (driveConnected) {
+    try {
+      await driveUploadJSON(`client_${client.id}.json`, client);
+      await saveManifest();
+      setSyncStatus('synced');
+    } catch { queueForSync(`client_${client.id}.json`); setSyncStatus('offline'); }
+  }
+}
+
+async function saveManifest() {
+  const manifest = { clients: clients.map(c => c.id), updated: new Date().toISOString() };
+  await driveUploadJSON('manifest.json', manifest);
+}
+
+async function deleteClientData(id) {
+  clients = clients.filter(x => x.id !== id);
+  lsSet('tac_clients', clients);
+  if (driveConnected) {
+    try {
+      await driveDeleteFile(`client_${id}.json`);
+      await saveManifest();
+    } catch {}
+  }
+  // Delete all client files from local storage
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(`file_${id}_`));
+  keys.forEach(k => localStorage.removeItem(k));
+}
+
+async function saveChecksData(clientId, data) {
+  lsSet(`checks_${clientId}`, data);
+  if (driveConnected) {
+    try { await driveUploadJSON(`checks_${clientId}.json`, data); setSyncStatus('synced'); }
+    catch { queueForSync(`checks_${clientId}.json`); setSyncStatus('offline'); }
+  }
+}
+
+async function loadChecksData(clientId) {
+  if (driveConnected) {
+    try {
+      const d = await driveDownloadJSON(`checks_${clientId}.json`);
+      if (d) { lsSet(`checks_${clientId}`, d); return d; }
+    } catch {}
+  }
+  return lsGet(`checks_${clientId}`, {});
+}
+
+// Files: store as dataUrls in localStorage (with Drive backup)
+async function saveFileData(clientId, category, filename, dataUrl) {
+  const key = `file_${clientId}_${category}_${filename}`;
+  lsSet(key, { name: filename, data: dataUrl, size: dataUrl.length, ts: Date.now() });
+  // Track in client file index
+  const c = clients.find(x => x.id === clientId);
+  if (c) {
+    if (!c.fileIndex) c.fileIndex = {};
+    if (!c.fileIndex[category]) c.fileIndex[category] = [];
+    if (!c.fileIndex[category].includes(filename)) c.fileIndex[category].push(filename);
+    await saveClientData(c);
+  }
+  if (driveConnected) {
+    try { await driveUploadBinary(`file_${clientId}_${category}_${filename}`, dataUrl); setSyncStatus('synced'); }
+    catch { queueForSync(`file_${clientId}_${category}_${filename}`); setSyncStatus('offline'); }
+  }
+  return { name: filename, size: dataUrl.length };
+}
+
+function listFilesData(clientId, category) {
+  const c = clients.find(x => x.id === clientId);
+  const names = c?.fileIndex?.[category] || [];
+  return names.map(name => {
+    const stored = lsGet(`file_${clientId}_${category}_${name}`, null);
+    return { name, size: stored?.size || 0, data: stored?.data || null };
+  });
+}
+
+async function deleteFileData(clientId, category, filename) {
+  localStorage.removeItem(`file_${clientId}_${category}_${filename}`);
+  const c = clients.find(x => x.id === clientId);
+  if (c?.fileIndex?.[category]) {
+    c.fileIndex[category] = c.fileIndex[category].filter(n => n !== filename);
+    await saveClientData(c);
+  }
+  if (driveConnected) {
+    try { await driveDeleteFile(`file_${clientId}_${category}_${filename}`); } catch {}
+  }
+}
+
+// Sync queue for offline changes
+function queueForSync(filename) {
+  syncQueue = lsGet('sync_queue', []);
+  if (!syncQueue.includes(filename)) syncQueue.push(filename);
+  lsSet('sync_queue', syncQueue);
+}
+
+async function flushSyncQueue() {
+  syncQueue = lsGet('sync_queue', []);
+  if (!syncQueue.length) return;
+  const remaining = [];
+  for (const filename of syncQueue) {
+    try {
+      if (filename.startsWith('client_')) {
+        const id = filename.replace('client_','').replace('.json','');
+        const c = clients.find(x => String(x.id) === String(id));
+        if (c) await driveUploadJSON(filename, c);
+      } else if (filename.startsWith('checks_')) {
+        const id = filename.replace('checks_','').replace('.json','');
+        const d = lsGet(`checks_${id}`, {});
+        await driveUploadJSON(filename, d);
+      } else if (filename.startsWith('file_')) {
+        const parts = filename.split('_');
+        const clientId = parts[1], category = parts[2], name = parts.slice(3).join('_');
+        const stored = lsGet(`file_${clientId}_${category}_${name}`, null);
+        if (stored?.data) await driveUploadBinary(filename, stored.data);
+      }
+    } catch { remaining.push(filename); }
+  }
+  lsSet('sync_queue', remaining);
+  syncQueue = remaining;
+}
+
+// ════════════════════════════════════════════════════════
+// SYNC STATUS UI
+// ════════════════════════════════════════════════════════
+function setSyncStatus(status) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if (!dot || !label) return;
+  const map = {
+    synced:    { c: 'var(--green)',  t: 'Synced ✓' },
+    syncing:   { c: 'var(--amber)',  t: 'Syncing…' },
+    offline:   { c: 'var(--amber)',  t: 'Offline — queued' },
+    error:     { c: 'var(--red)',    t: 'Sync error' },
+    local:     { c: 'var(--text3)', t: 'Local only' },
+  };
+  const s = map[status] || map.local;
+  dot.style.background = s.c;
+  label.textContent = s.t;
+}
+
+async function manualSync() {
+  if (!driveConnected) { showToast('Not connected to Google Drive'); return; }
+  setSyncStatus('syncing');
+  try {
+    await buildFileIndex();
+    await flushSyncQueue();
+    await loadAllClients();
+    renderSidebarClients();
+    renderDashboard();
+    setSyncStatus('synced');
+    showToast('Sync complete ✓');
+  } catch(e) { setSyncStatus('error'); showToast('Sync error — try again'); }
+}
+
+// Auto sync every 60 seconds
+setInterval(async () => {
+  if (driveConnected && syncQueue.length > 0) {
+    try { await flushSyncQueue(); setSyncStatus('synced'); } catch {}
+  }
+}, 60000);
+
+// ════════════════════════════════════════════════════════
+// BACKUP
+// ════════════════════════════════════════════════════════
+function downloadBackup() {
+  const data = {
+    exported: new Date().toISOString(),
+    version: '1.0',
+    clients: clients,
+    checks: {},
+    files_note: 'File attachments (photos, tech packs) are stored separately in Google Drive and local storage'
+  };
+  // Include all checks
+  clients.forEach(c => {
+    data.checks[c.id] = lsGet(`checks_${c.id}`, {});
+  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `TheApparelCo_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  localStorage.setItem('last_backup_date', new Date().toDateString());
+  showToast('Backup downloaded ✓');
+}
+
+function checkDailyBackup() {
+  const last = localStorage.getItem('last_backup_date');
+  const today = new Date().toDateString();
+  if (last !== today && clients.length > 0) {
+    setTimeout(() => {
+      showToast('Daily backup ready — click ⬇ Backup to save', 6000);
+    }, 4000);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// APP INIT
+// ════════════════════════════════════════════════════════
+async function showApp() {
+  document.getElementById('connect-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'grid';
+  setSyncStatus(driveConnected ? 'syncing' : 'local');
+
+  if (driveConnected) {
+    try {
+      document.getElementById('connect-status') && (document.getElementById('connect-status').textContent = 'Building file index…');
+      await buildFileIndex();
+      await loadAllClients();
+      await flushSyncQueue();
+      setSyncStatus('synced');
+    } catch(e) {
+      await loadAllClients(); // fall back to local cache
+      setSyncStatus('offline');
+    }
+  } else {
+    await loadAllClients();
+    setSyncStatus('local');
+  }
+
+  renderSidebarClients();
+  renderDashboard();
+  populatePriceClients();
+  document.getElementById('i-date').value = today();
+  buildInvoice();
+  addGarment();
+  calcPrice();
+  checkDailyBackup();
+}
+
+async function init() {
+  // Check for OAuth callback
+  if (location.hash.includes('access_token')) {
+    if (handleOAuthCallback()) { driveConnected = true; await showApp(); return; }
+  }
+  // Check stored token
+  if (loadStoredToken()) { driveConnected = true; await showApp(); return; }
+  // Show connect screen
+  document.getElementById('connect-screen').style.display = 'flex';
+}
+
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+function today() { return new Date().toISOString().split('T')[0]; }
+function sym(c) { return c==='GBP'?'£':c==='USD'?'$':'€'; }
+function initials(s) { return (s||'').trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?'; }
+function formatSize(b) { if(b<1024)return b+'B'; if(b<1048576)return (b/1024).toFixed(0)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
+function fileIcon(n) {
+  const e=(n||'').split('.').pop().toLowerCase();
+  return {pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ai:'🎨',eps:'🎨',png:'🖼',jpg:'🖼',jpeg:'🖼',zip:'📦',rar:'📦'}[e]||'📎';
+}
+function showToast(msg, duration=3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ════════════════════════════════════════════════════════
+// PANELS
+// ════════════════════════════════════════════════════════
+function showPanel(name, clientId) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item,.client-nav').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  const navEl = document.getElementById('nav-' + name);
+  if (navEl) navEl.classList.add('active');
+  if (clientId) {
+    const el = document.getElementById('cn-' + clientId);
+    if (el) el.classList.add('active');
+    renderClientDetail(clientId);
+  }
+  if (name === 'pricing') populatePriceClients();
+  if (name === 'invoice') { document.getElementById('i-date').value = today(); buildInvoice(); }
+}
+
+// ════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════
+function renderDashboard() {
+  const el = document.getElementById('dashboard-content');
+  if (!clients.length) {
+    el.innerHTML = `<div class="panel-title">Overview</div><div class="empty"><div class="empty-icon">🧵</div><p>No clients yet.<br>Click + next to Clients to add your first one.</p></div>`;
+    return;
+  }
+  const active = clients.filter(c=>c.status==='active').length;
+  const sampling = clients.filter(c=>c.status==='sample').length;
+  const done = clients.filter(c=>c.status==='done').length;
+  el.innerHTML = `
+    <div class="panel-title">Overview</div>
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat"><div class="stat-label">Active</div><div class="stat-val">${active}</div></div>
+      <div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">${sampling}</div></div>
+      <div class="stat"><div class="stat-label">Done</div><div class="stat-val">${done}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">All clients (${clients.length})</span><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div>
+      <div>${clients.map(c=>`
+        <div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel('client','${c.id}')">
+          <div class="avatar" style="width:34px;height:34px;font-size:12px">${initials(c.brand)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.brand}</div>
+            <div style="font-size:11px;color:var(--text3)">${[c.contact,c.country].filter(Boolean).join(' · ')}</div>
+          </div>
+          <span class="badge-xs badge-${c.status}">${c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done'}</span>
+        </div>`).join('')}</div>
+    </div>`;
+}
+
+function renderSidebarClients() {
+  document.getElementById('sidebar-clients').innerHTML = clients.map(c=>`
+    <div class="client-nav" id="cn-${c.id}" onclick="showPanel('client','${c.id}')">
+      <div class="avatar-xs">${initials(c.brand)}</div>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${c.brand}</span>
+      <span class="badge-xs badge-${c.status}">${c.status==='active'?'●':c.status==='sample'?'◐':'○'}</span>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// CLIENT MODAL
+// ════════════════════════════════════════════════════════
+let editingId = null;
+
+function openClientModal(id) {
+  editingId = id || null;
+  const c = id ? clients.find(x=>x.id===id) : null;
+  document.getElementById('modal-title').textContent = c ? 'Edit client' : 'New client';
+  document.getElementById('modal-save-btn').textContent = c ? 'Save changes' : 'Save client';
+  ['f-brand','f-contact','f-email','f-wa','f-address','f-country','f-vat','f-garments','f-notes'].forEach(fid => {
+    const field = fid.replace('f-','');
+    document.getElementById(fid).value = c ? (c[field]||'') : '';
+  });
+  document.getElementById('f-cur').value = c?.currency || 'EUR';
+  document.getElementById('client-modal').classList.add('open');
+}
+
+async function saveClient() {
+  const brand = document.getElementById('f-brand').value.trim();
+  if (!brand) { alert('Brand name required'); return; }
+  let c = editingId ? clients.find(x=>x.id===editingId) : { id: Date.now(), status: 'active', fileIndex: {} };
+  if (!c) return;
+  ['brand','contact','email','wa','address','country','vat','garments','notes'].forEach(f => {
+    c[f] = document.getElementById('f-' + f).value.trim();
+  });
+  c.currency = document.getElementById('f-cur').value;
+  await saveClientData(c);
+  closeModal('client-modal');
+  renderSidebarClients();
+  renderDashboard();
+  populatePriceClients();
+  if (editingId) renderClientDetail(editingId);
+}
+
+async function deleteClient(id) {
+  if (!confirm('Delete this client and all data?')) return;
+  await deleteClientData(id);
+  renderSidebarClients();
+  renderDashboard();
+  showPanel('dashboard');
+}
+
+async function updateStatus(id, status) {
+  const c = clients.find(x=>x.id===id);
+  if (!c) return;
+  c.status = status;
+  await saveClientData(c);
+  renderSidebarClients();
+  renderDashboard();
+  renderClientDetail(id);
+}
+
+// ════════════════════════════════════════════════════════
+// CLIENT DETAIL
+// ════════════════════════════════════════════════════════
+let currentClientId = null;
+
+async function renderClientDetail(id) {
+  currentClientId = id;
+  const c = clients.find(x => x.id == id);
+  if (!c) return;
+  const checks = await loadChecksData(id);
+  const photos = listFilesData(id, 'photos');
+  const docs = listFilesData(id, 'techpacks');
+
+  const el = document.getElementById('client-content');
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+      <div class="panel-title" style="margin:0">${c.brand}</div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <select class="btn btn-sm" onchange="updateStatus('${c.id}',this.value)" style="padding:5px 26px 5px 10px">
+          <option value="active" ${c.status==='active'?'selected':''}>Active</option>
+          <option value="sample" ${c.status==='sample'?'selected':''}>Sampling</option>
+          <option value="done" ${c.status==='done'?'selected':''}>Done</option>
+        </select>
+        <button class="btn btn-sm" onclick="openClientModal('${c.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteClient('${c.id}')">Delete</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab(this,'tab-info')">Info</button>
+      <button class="tab" onclick="switchTab(this,'tab-workflow')">Workflow</button>
+      <button class="tab" onclick="switchTab(this,'tab-photos')">Photos (${photos.length})</button>
+      <button class="tab" onclick="switchTab(this,'tab-docs')">Tech packs (${docs.length})</button>
+    </div>
+
+    <div id="tab-info">
+      <div class="card"><div class="card-body">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--border)">
+          <div class="avatar">${initials(c.brand)}</div>
+          <div><div style="font-size:16px;font-weight:500">${c.brand}</div>${c.contact?`<div style="font-size:12px;color:var(--text3)">${c.contact}</div>`:''}</div>
+        </div>
+        ${c.email?`<div class="detail-row"><span class="detail-key">Email</span><span class="detail-val">${c.email}</span></div>`:''}
+        ${c.wa?`<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${c.wa}</span></div>`:''}
+        ${c.address?`<div class="detail-row"><span class="detail-key">Address</span><span class="detail-val">${c.address}</span></div>`:''}
+        ${c.country?`<div class="detail-row"><span class="detail-key">Country</span><span class="detail-val">${c.country}</span></div>`:''}
+        ${c.vat?`<div class="detail-row"><span class="detail-key">VAT</span><span class="detail-val">${c.vat}</span></div>`:''}
+        ${c.currency?`<div class="detail-row"><span class="detail-key">Currency</span><span class="detail-val">${c.currency}</span></div>`:''}
+        ${c.garments?`<div class="detail-row"><span class="detail-key">Garments</span><span class="detail-val">${c.garments}</span></div>`:''}
+        ${c.notes?`<div class="detail-row"><span class="detail-key">Notes</span><span class="detail-val">${c.notes}</span></div>`:''}
+      </div></div>
+    </div>
+
+    <div id="tab-workflow" style="display:none">${renderWorkflow(id, checks)}</div>
+
+    <div id="tab-photos" style="display:none">
+      <div class="card"><div class="card-body">
+        <div class="photo-grid">
+          ${photos.map((p,i) => p.data ? `
+            <div class="photo-thumb">
+              <img src="${p.data}" alt="${p.name}" onclick="openSlideshow('${id}',${i})">
+              <div class="photo-overlay">
+                <button class="photo-action" onclick="openSlideshow('${id}',${i})">View</button>
+                <button class="photo-action" onclick="delPhoto('${id}','${p.name}')">Delete</button>
+              </div>
+            </div>` : '').join('')}
+          <div class="photo-add" onclick="triggerUpload('photo','${id}')"><div style="font-size:22px">+</div><div>Add photo</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">${photos.length} photo${photos.length!==1?'s':''}</div>
+      </div></div>
+    </div>
+
+    <div id="tab-docs" style="display:none">
+      <div class="card"><div class="card-body">
+        <div class="upload-zone" onclick="triggerUpload('doc','${id}')">
+          <div style="font-size:24px;margin-bottom:5px">📁</div>
+          <div style="font-size:12px;color:var(--text3)">Click to upload tech packs, PDFs, docs</div>
+        </div>
+        ${docs.map(f => `
+          <div class="file-item">
+            <span class="file-icon">${fileIcon(f.name)}</span>
+            <span class="file-name">${f.name}</span>
+            <span class="file-size">${formatSize(f.size)}</span>
+            <button class="file-del" onclick="delDoc('${id}','${f.name}')">✕</button>
+          </div>`).join('')}
+        ${!docs.length?`<div style="font-size:13px;color:var(--text3);text-align:center;padding:8px">No files yet</div>`:''}
+      </div></div>
+    </div>`;
+}
+
+function switchTab(btn, tabId) {
+  const container = btn.closest('#client-content');
+  container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['tab-info','tab-workflow','tab-photos','tab-docs'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === tabId ? 'block' : 'none';
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// WORKFLOW
+// ════════════════════════════════════════════════════════
+const PHASES = [
+  {name:'Onboarding', items:[
+    {label:'Tech pack received', upload:true},
+    {label:'Quote sent to client', upload:false},
+    {label:'Deposit invoice sent (50%)', upload:false},
+    {label:'Deposit payment confirmed', upload:false}
+  ]},
+  {name:'Sampling', items:[
+    {label:'Factory briefed on sample', upload:false},
+    {label:'Sample in production — update sent', upload:true},
+    {label:'Sample ready — photos sent to client', upload:true},
+    {label:'Sample approved by client', upload:false}
+  ]},
+  {name:'Bulk production', items:[
+    {label:'Fabric & trims ordered — update sent', upload:true},
+    {label:'Bulk production started — update sent', upload:true},
+    {label:'Mid-production photos sent to client', upload:true},
+    {label:'Full payment schedule confirmed', upload:false}
+  ]},
+  {name:'QC & dispatch', items:[
+    {label:'QC completed — photos sent to client', upload:true},
+    {label:'Final invoice sent (50% balance)', upload:false},
+    {label:'Balance payment confirmed', upload:false},
+    {label:'Order packed & dispatched', upload:true},
+    {label:'Tracking number sent to client', upload:false},
+    {label:'Delivery confirmed with client', upload:false}
+  ]}
+];
+
+function renderWorkflow(clientId, checks) {
+  const stepFiles = lsGet(`stepfiles_${clientId}`, {});
+  return PHASES.map(phase => `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><span class="card-title">${phase.name}</span></div>
+      <div class="card-body" style="padding-top:4px;padding-bottom:4px">
+        ${phase.items.map(item => {
+          const k = phase.name + '|' + item.label;
+          const done = !!checks[k];
+          const files = stepFiles[k] || [];
+          return `
+            <div>
+              <div class="check-row">
+                <div class="check-box ${done?'on':''}" onclick="toggleCheck('${clientId}','${k.replace(/'/g,"\\'")}')"></div>
+                <span class="check-text ${done?'done':''}" onclick="toggleCheck('${clientId}','${k.replace(/'/g,"\\'")}')">
+                  ${item.label}
+                </span>
+                ${item.upload?`<button class="btn btn-xs btn-ghost" onclick="triggerStepUpload('${clientId}','${k.replace(/'/g,"\\'")}')">📎${files.length?' '+files.length:''}</button>`:''}
+              </div>
+              ${files.length?`<div class="step-files">${files.map((f,fi)=>`
+                <div class="file-chip" title="${f.name}">
+                  <span>${fileIcon(f.name)}</span>
+                  <span class="file-chip-name">${f.name}</span>
+                  <span class="file-chip-del" onclick="delStepFile('${clientId}','${k.replace(/'/g,"\\'")}',${fi})">✕</span>
+                </div>`).join('')}</div>`:''}
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+async function toggleCheck(clientId, key) {
+  const checks = await loadChecksData(clientId);
+  checks[key] = !checks[key];
+  await saveChecksData(clientId, checks);
+  renderClientDetail(clientId);
+}
+
+// Step file uploads
+let activeStepClient = null, activeStepKey = null;
+
+function triggerStepUpload(clientId, stepKey) {
+  activeStepClient = clientId; activeStepKey = stepKey;
+  document.getElementById('step-input').click();
+}
+
+async function handleStepFiles(e) {
+  const files = Array.from(e.target.files);
+  const stepFiles = lsGet(`stepfiles_${activeStepClient}`, {});
+  if (!stepFiles[activeStepKey]) stepFiles[activeStepKey] = [];
+  for (const f of files) {
+    const dataUrl = await readAsDataUrl(f);
+    const name = f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+    stepFiles[activeStepKey].push({ name, size: f.size, data: dataUrl });
+    // Also upload to drive
+    if (driveConnected) {
+      try { await driveUploadBinary(`stepfile_${activeStepClient}_${Date.now()}_${name}`, dataUrl); } catch {}
+    }
+  }
+  lsSet(`stepfiles_${activeStepClient}`, stepFiles);
+  e.target.value = '';
+  renderClientDetail(activeStepClient);
+}
+
+function delStepFile(clientId, stepKey, idx) {
+  if (!confirm('Remove this file?')) return;
+  const stepFiles = lsGet(`stepfiles_${clientId}`, {});
+  if (stepFiles[stepKey]) { stepFiles[stepKey].splice(idx, 1); lsSet(`stepfiles_${clientId}`, stepFiles); }
+  renderClientDetail(clientId);
+}
+
+// ════════════════════════════════════════════════════════
+// PHOTOS & DOCS
+// ════════════════════════════════════════════════════════
+let activeUploadClient = null, activeUploadType = null;
+
+function triggerUpload(type, clientId) {
+  activeUploadClient = clientId; activeUploadType = type;
+  document.getElementById(type === 'photo' ? 'photo-input' : 'doc-input').click();
+}
+
+function readAsDataUrl(file) {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = e => res(e.target.result);
+    fr.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoFiles(e) {
+  const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+  setSyncStatus('syncing');
+  for (const f of files) {
+    const dataUrl = await readAsDataUrl(f);
+    const name = f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+    await saveFileData(activeUploadClient, 'photos', name, dataUrl);
+  }
+  e.target.value = '';
+  setSyncStatus('synced');
+  renderClientDetail(activeUploadClient);
+}
+
+async function handleDocFiles(e) {
+  const files = Array.from(e.target.files);
+  setSyncStatus('syncing');
+  for (const f of files) {
+    const dataUrl = await readAsDataUrl(f);
+    const name = f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+    await saveFileData(activeUploadClient, 'techpacks', name, dataUrl);
+  }
+  e.target.value = '';
+  setSyncStatus('synced');
+  renderClientDetail(activeUploadClient);
+}
+
+async function delPhoto(clientId, filename) {
+  if (!confirm('Delete this photo?')) return;
+  await deleteFileData(clientId, 'photos', filename);
+  renderClientDetail(clientId);
+}
+
+async function delDoc(clientId, filename) {
+  if (!confirm('Delete this file?')) return;
+  await deleteFileData(clientId, 'techpacks', filename);
+  renderClientDetail(clientId);
+}
+
+// Slideshow
+let slidePhotos = [], slideIdx = 0, slideClientId = null;
+
+function openSlideshow(clientId, idx) {
+  slideClientId = clientId;
+  slidePhotos = listFilesData(clientId, 'photos').filter(p => p.data);
+  slideIdx = idx;
+  showSlide();
+  document.getElementById('slideshow').classList.add('open');
+}
+function showSlide() {
+  document.getElementById('slideshow-img').src = slidePhotos[slideIdx]?.data || '';
+  document.getElementById('slideshow-caption').textContent = `${slideIdx+1} / ${slidePhotos.length} — ${slidePhotos[slideIdx]?.name||''}`;
+}
+function slidePrev() { slideIdx = (slideIdx-1+slidePhotos.length)%slidePhotos.length; showSlide(); }
+function slideNext() { slideIdx = (slideIdx+1)%slidePhotos.length; showSlide(); }
+function closeSlideshow() { document.getElementById('slideshow').classList.remove('open'); }
+
+// ════════════════════════════════════════════════════════
+// PRICING
+// ════════════════════════════════════════════════════════
+let garmentIdx = 0, sampleIdx = 0, invoicePayload = {};
+
+function populatePriceClients() {
+  const sel = document.getElementById('p-client');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— select client —</option>' + clients.map(c=>`<option value="${c.id}">${c.brand}</option>`).join('');
+  sel.value = cur;
+}
+
+function onPriceClient() {
+  const id = document.getElementById('p-client').value;
+  const c = clients.find(x=>x.id==id);
+  if (c?.currency) document.getElementById('p-cur').value = c.currency;
+  calcPrice();
+}
+
+function addGarment() {
+  garmentIdx++;
+  const wrap = document.getElementById('garments-wrap');
+  const div = document.createElement('div');
+  div.className = 'style-block'; div.id = 'gb-'+garmentIdx;
+  const comm = document.getElementById('p-comm').value||25;
+  div.innerHTML = `<button class="remove-btn" onclick="document.getElementById('gb-${garmentIdx}').remove();calcPrice()">✕</button>
+    <div class="style-block-title">Style ${garmentIdx}</div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="field" style="margin:0"><label>Garment / description</label><input placeholder="e.g. heavyweight hoodie — black" oninput="calcPrice()"></div>
+      <div class="field" style="margin:0"><label>Size range</label><input placeholder="e.g. XS-XL" oninput="calcPrice()"></div>
+    </div>
+    <div class="grid3">
+      <div class="field" style="margin:0"><label>Units</label><input type="number" value="300" min="1" oninput="calcPrice()"></div>
+      <div class="field" style="margin:0"><label>Factory price/unit (€)</label><input type="number" value="18.00" step="0.01" oninput="calcPrice()"></div>
+      <div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="${comm}" oninput="calcPrice()"></div>
+    </div>`;
+  wrap.appendChild(div); calcPrice();
+}
+
+function addSample() {
+  sampleIdx++;
+  document.getElementById('samples-empty').style.display='none';
+  const wrap = document.getElementById('samples-wrap');
+  const div = document.createElement('div');
+  div.className = 'style-block'; div.id = 'sb-'+sampleIdx;
+  div.innerHTML = `<button class="remove-btn" onclick="document.getElementById('sb-${sampleIdx}').remove();calcPrice()">✕</button>
+    <div class="style-block-title">Sample ${sampleIdx}</div>
+    <div class="grid3">
+      <div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. size M hoodie" oninput="calcPrice()"></div>
+      <div class="field" style="margin:0"><label>Factory price (€)</label><input type="number" value="45" step="0.01" oninput="calcPrice()"></div>
+      <div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="100" oninput="calcPrice()"></div>
+    </div>`;
+  wrap.appendChild(div); calcPrice();
+}
+
+function getGarments() {
+  return Array.from(document.querySelectorAll('.style-block[id^="gb-"]')).map(b=>{
+    const inp=b.querySelectorAll('input');
+    const desc=inp[0].value||'Garment',sizes=inp[1].value||'',units=parseInt(inp[2].value)||0,fp=parseFloat(inp[3].value)||0,co=parseFloat(inp[4].value)||0,ppu=fp*(1+co/100);
+    return{desc,sizes,units,fp,co,ppu,subtotal:ppu*units};
+  });
+}
+function getSamples() {
+  return Array.from(document.querySelectorAll('.style-block[id^="sb-"]')).map(b=>{
+    const inp=b.querySelectorAll('input');
+    const desc=inp[0].value||'Sample',fp=parseFloat(inp[1].value)||0,co=parseFloat(inp[2].value)||100;
+    return{desc,fp,co,total:fp*(1+co/100)};
+  });
+}
+
+function calcPrice() {
+  const iva=parseFloat(document.getElementById('p-iva').value)||0;
+  const fx=parseFloat(document.getElementById('p-fx').value)||0;
+  const ship=parseFloat(document.getElementById('p-ship').value)||0;
+  const cur=document.getElementById('p-cur').value;
+  const s=sym(cur);
+  const garments=getGarments(),samples=getSamples();
+  const garmentSub=garments.reduce((a,g)=>a+g.subtotal,0);
+  const ivaAmt=garmentSub*(iva/100),fxAmt=garmentSub*(fx/100);
+  const prodTotal=garmentSub+ivaAmt+fxAmt+ship;
+  const sampTotal=samples.reduce((a,x)=>a+x.total,0);
+  const grand=prodTotal+sampTotal;
+
+  document.getElementById('breakdown').innerHTML = `
+    ${garments.length?garments.map(g=>`
+      <div class="price-row" style="flex-direction:column;align-items:flex-start;gap:1px;padding-bottom:10px">
+        <div style="display:flex;justify-content:space-between;width:100%;font-weight:500">${g.desc}${g.sizes?` <span style="color:var(--text3);font-size:12px;font-weight:300">(${g.sizes})</span>`:''}<span style="color:var(--accent)">${s}${g.subtotal.toFixed(2)}</span></div>
+        <div style="color:var(--text3);font-size:12px">${g.units} × ${s}${g.ppu.toFixed(2)}/unit · factory ${s}${g.fp.toFixed(2)} + ${g.co}% commission</div>
+      </div>`).join(''):`<div class="price-row" style="color:var(--text3)">No styles added yet</div>`}
+    <div class="price-row"><span style="color:var(--text3)">Subtotal</span><span>${s}${garmentSub.toFixed(2)}</span></div>
+    <div class="price-row"><span style="color:var(--text3)">IVA (${iva}%)</span><span>+${s}${ivaAmt.toFixed(2)}</span></div>
+    <div class="price-row"><span style="color:var(--text3)">FX fee (${fx}%)</span><span>+${s}${fxAmt.toFixed(2)}</span></div>
+    <div class="price-row"><span style="color:var(--text3)">Shipping</span><span>+${s}${ship.toFixed(2)}</span></div>
+    ${samples.map(x=>`<div class="price-row"><span style="color:var(--text3)">${x.desc} (+${x.co}% comm)</span><span>+${s}${x.total.toFixed(2)}</span></div>`).join('')}
+    <div class="price-row grand"><span>Grand total</span><span>${s}${grand.toFixed(2)}</span></div>`;
+
+  document.getElementById('s-prod').textContent=s+prodTotal.toFixed(2);
+  document.getElementById('s-samp').textContent=s+sampTotal.toFixed(2);
+  document.getElementById('s-grand').textContent=s+grand.toFixed(2);
+  invoicePayload={garments,iva,fx,ship,garmentSub,ivaAmt,fxAmt,prodTotal,samples,sampTotal,grand,cur};
+}
+
+function pushToInvoice() {
+  const cid=document.getElementById('p-client').value;
+  const c=clients.find(x=>x.id==cid);
+  if(c){document.getElementById('i-client').value=c.brand;document.getElementById('i-cur').value=invoicePayload.cur||'EUR';}
+  document.getElementById('i-date').value=today();
+  showPanel('invoice');
+  buildInvoice();
+}
+
+// ════════════════════════════════════════════════════════
+// INVOICE
+// ════════════════════════════════════════════════════════
+function buildInvoice() {
+  const d=invoicePayload;
+  const cur=document.getElementById('i-cur').value;
+  const s=sym(cur);
+  const client=document.getElementById('i-client').value||'—';
+  const num=document.getElementById('i-num').value||'TAC-001';
+  const date=document.getElementById('i-date').value||today();
+  const due=parseInt(document.getElementById('i-due').value)||14;
+  const terms=document.getElementById('i-terms').value;
+  const dueDate=new Date(date);dueDate.setDate(dueDate.getDate()+due);
+  const dueDateStr=dueDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const cid=document.getElementById('p-client')?.value;
+  const cl=clients.find(x=>x.id==cid);
+  const hasData=d.garments&&d.garments.length>0;
+
+  document.getElementById('invoice-preview').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div><div class="inv-logo">The Apparel Co</div><div class="inv-address">info@theapparelco.co<br>theapparelco.co<br>Porto, Portugal</div></div>
+      <div style="text-align:right"><div class="inv-number">${num}</div><div class="inv-meta">${date}<br>Due: ${dueDateStr}</div></div>
+    </div>
+    <hr class="inv-hr">
+    <div style="margin-bottom:16px">
+      <div class="inv-bill-label">Bill to</div>
+      <div class="inv-bill-name">${client}</div>
+      ${cl?.address?`<div style="font-size:12px;color:#666;margin-top:3px;line-height:1.6">${cl.address}${cl.country?', '+cl.country:''}</div>`:''}
+      ${cl?.vat?`<div style="font-size:12px;color:#999">VAT: ${cl.vat}</div>`:''}
+    </div>
+    <table class="inv-tbl">
+      <thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>
+        ${hasData?d.garments.map(g=>`<tr><td>${g.desc}${g.sizes?` <span style="color:#999;font-size:12px">(${g.sizes})</span>`:''}</td><td style="text-align:right">${g.units}</td><td style="text-align:right">${s}${g.ppu.toFixed(2)}</td><td style="text-align:right">${s}${g.subtotal.toFixed(2)}</td></tr>`).join(''):''}
+        ${hasData&&d.ivaAmt?`<tr><td>IVA (${d.iva}%)</td><td></td><td></td><td style="text-align:right">${s}${d.ivaAmt.toFixed(2)}</td></tr>`:''}
+        ${hasData&&d.fxAmt?`<tr><td>FX fee (${d.fx}%)</td><td></td><td></td><td style="text-align:right">${s}${d.fxAmt.toFixed(2)}</td></tr>`:''}
+        ${hasData&&d.ship?`<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">${s}${d.ship.toFixed(2)}</td></tr>`:''}
+        ${(d.samples||[]).map(x=>`<tr><td>${x.desc}</td><td style="text-align:right">1</td><td style="text-align:right">${s}${x.total.toFixed(2)}</td><td style="text-align:right">${s}${x.total.toFixed(2)}</td></tr>`).join('')}
+        ${!hasData&&!(d.samples||[]).length?`<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">Go to Pricing → Generate invoice</td></tr>`:''}
+      </tbody>
+    </table>
+    <hr class="inv-hr">
+    <div style="max-width:220px;margin-left:auto">
+      <div class="inv-total-line grand"><span>Total</span><span>${s}${(d.grand||0).toFixed(2)}</span></div>
+      <div class="inv-total-line"><span>50% deposit</span><span>${s}${((d.grand||0)/2).toFixed(2)}</span></div>
+      <div class="inv-total-line"><span>50% before dispatch</span><span>${s}${((d.grand||0)/2).toFixed(2)}</span></div>
+    </div>
+    <div class="inv-footer">Payment terms: ${terms}<br>Thank you for working with The Apparel Co.</div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') { closeSlideshow(); closeModal('client-modal'); }
+  if (document.getElementById('slideshow').classList.contains('open')) {
+    if (e.key==='ArrowLeft') slidePrev();
+    if (e.key==='ArrowRight') slideNext();
+  }
+});
+
+// ════════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
