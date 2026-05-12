@@ -197,6 +197,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="nav-item" onclick="showPanel('pricing')" id="nav-pricing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pricing</div>
       <div class="nav-item" onclick="showPanel('invoice')" id="nav-invoice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Invoice</div>
       <div class="nav-item" onclick="showPanel('reports')" id="nav-reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports</div>
+      <div class="nav-item" onclick="showPanel('workflow-report')" id="nav-workflow-report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Progress</div>
       <div class="nav-item" onclick="showPanel('settings')" id="nav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
     </div>
     <hr class="sidebar-divider">
@@ -266,6 +267,26 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
       </div></div>
       <div id="report-output"></div>
+    </div>
+    <div class="panel" id="panel-workflow-report">
+      <div class="panel-title">Production progress</div>
+      <div class="card"><div class="card-body">
+        <div class="grid2" style="align-items:flex-end;margin-bottom:0">
+          <div class="field" style="margin:0"><label>Status filter</label>
+            <select id="wr-status">
+              <option value="all">All clients</option>
+              <option value="active">Active</option>
+              <option value="sample">Sampling</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="generateWorkflowReport()">Generate</button>
+            <button class="btn" onclick="exportWorkflowReport()">Export PDF</button>
+          </div>
+        </div>
+      </div></div>
+      <div id="workflow-report-output"></div>
     </div>
     <div class="panel" id="panel-settings">
       <div class="panel-title">Settings</div>
@@ -458,7 +479,22 @@ function renderSidebarClients(){document.getElementById('sidebar-clients').inner
 // CLIENT MODAL
 let editingId=null;
 function openClientModal(id){editingId=id||null;const c=id?clients.find(x=>x.id===id):null;document.getElementById('modal-title').textContent=c?'Edit client':'New client';document.getElementById('modal-save-btn').textContent=c?'Save changes':'Save client';['brand','contact','email','wa','address','country','vat','garments','notes'].forEach(f=>{document.getElementById('f-'+f).value=c?(c[f]||''):'';});document.getElementById('f-cur').value=c?.currency||'EUR';document.getElementById('f-commission').value=c?.commission!=null?c.commission:20;document.getElementById('client-modal').classList.add('open');}
-async function saveClient(){const brand=document.getElementById('f-brand').value.trim();if(!brand){alert('Brand name required');return;}let c=editingId?clients.find(x=>x.id===editingId):{id:Date.now(),status:'active',fileIndex:{}};if(!c)return;['brand','contact','email','wa','address','country','vat','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.currency=document.getElementById('f-cur').value;c.commission=parseFloat(document.getElementById('f-commission').value)||20;await saveClientData(c);closeModal('client-modal');renderSidebarClients();renderDashboard();populatePriceClients();if(editingId)renderClientDetail(editingId);}
+async function saveClient(){
+  const btn=document.getElementById('modal-save-btn');
+  if(btn.disabled)return;
+  btn.disabled=true;btn.textContent='Saving…';
+  const brand=document.getElementById('f-brand').value.trim();
+  if(!brand){alert('Brand name required');btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';return;}
+  let c=editingId?clients.find(x=>x.id===editingId):{id:Date.now(),status:'active',fileIndex:{}};
+  if(!c){btn.disabled=false;return;}
+  ['brand','contact','email','wa','address','country','vat','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});
+  c.currency=document.getElementById('f-cur').value;
+  c.commission=parseFloat(document.getElementById('f-commission').value)||20;
+  try{await saveClientData(c);}catch(e){btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';showToast('Save failed — check connection');return;}
+  closeModal('client-modal');renderSidebarClients();renderDashboard();populatePriceClients();
+  if(editingId)renderClientDetail(editingId);
+  btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';
+}
 async function deleteClient(id){if(!confirm('Delete this client and all data?'))return;await deleteClientData(id);renderSidebarClients();renderDashboard();showPanel('dashboard');}
 async function updateStatus(id,status){const c=clients.find(x=>x.id===id);if(!c)return;c.status=status;await saveClientData(c);renderSidebarClients();renderDashboard();renderClientDetail(id);}
 
@@ -683,6 +719,184 @@ function getCompanyAddressHtml() {
   const co = getCompanyInfo();
   const lines = [co.email, co.website, co.address, co.phone].filter(Boolean);
   return '<div class="inv-address">' + lines.join('<br>') + '</div>';
+}
+
+// WORKFLOW REPORT
+function generateWorkflowReport() {
+  const statusFilter = document.getElementById('wr-status').value;
+  let filtered = clients;
+  if (statusFilter !== 'all') filtered = filtered.filter(c => c.status === statusFilter);
+  if (!filtered.length) {
+    document.getElementById('workflow-report-output').innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)">No clients for selected filter</div>';
+    return;
+  }
+
+  const phaseNames = ['Onboarding', 'Sampling', 'Bulk production', 'QC & dispatch'];
+  const allSteps = PHASES.flatMap(p => p.items.map(i => ({ phase: p.name, label: i.label })));
+  const totalSteps = allSteps.length;
+
+  const rows = filtered.map(c => {
+    const checks = lsGet('checks_' + c.id, {});
+    const completedSteps = allSteps.filter(s => checks[s.phase + '|' + s.label]).length;
+    const pct = Math.round((completedSteps / totalSteps) * 100);
+
+    // Find current phase
+    let currentPhase = 'Not started';
+    let currentStep = '—';
+    for (const phase of PHASES) {
+      for (const item of phase.items) {
+        const k = phase.name + '|' + item.label;
+        if (!checks[k]) { currentPhase = phase.name; currentStep = item.label; break; }
+      }
+      if (currentStep !== '—') break;
+    }
+    if (completedSteps === totalSteps) { currentPhase = 'Completed'; currentStep = 'All done ✓'; }
+
+    // Phase breakdown
+    const phaseProgress = PHASES.map(phase => {
+      const total = phase.items.length;
+      const done = phase.items.filter(i => checks[phase.name + '|' + i.label]).length;
+      return { name: phase.name, done, total, pct: Math.round((done / total) * 100) };
+    });
+
+    const quotes = lsGet('quotes_' + c.id, []);
+    const invoices = lsGet('invoices_' + c.id, []);
+    const stats = calcClientStats(c.id);
+
+    return { c, completedSteps, totalSteps, pct, currentPhase, currentStep, phaseProgress, quotes, invoices, stats };
+  });
+
+  const el = document.getElementById('workflow-report-output');
+  el.innerHTML = rows.map(r => {
+    const pctColor = r.pct >= 75 ? 'var(--green)' : r.pct >= 40 ? 'var(--amber)' : 'var(--red)';
+    const statusLabel = r.c.status === 'active' ? 'Active' : r.c.status === 'sample' ? 'Sampling' : 'Done';
+    return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header" style="cursor:pointer" onclick="showPanel('client','${r.c.id}')">
+        <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+          <div class="avatar" style="width:34px;height:34px;font-size:12px;flex-shrink:0">${initials(r.c.brand)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:15px">${r.c.brand}</div>
+            <div style="font-size:11px;color:var(--text3)">${r.currentPhase} <span style="color:var(--text2)">→ ${r.currentStep}</span></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:18px;font-weight:500;color:${pctColor}">${r.pct}%</div>
+            <span class="badge-xs badge-${r.c.status}">${statusLabel}</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Overall progress bar -->
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:5px">
+            <span>Overall progress</span><span>${r.completedSteps} / ${r.totalSteps} steps</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:20px;height:8px;overflow:hidden;border:0.5px solid var(--border)">
+            <div style="height:100%;width:${r.pct}%;background:${pctColor};border-radius:20px;transition:width 0.3s"></div>
+          </div>
+        </div>
+        <!-- Phase breakdown -->
+        <div class="grid4" style="gap:8px;margin-bottom:14px">
+          ${r.phaseProgress.map(p => `
+            <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px;border:0.5px solid var(--border)">
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">${p.name}</div>
+              <div style="font-size:13px;font-weight:500;color:${p.pct===100?'var(--green)':p.pct>0?'var(--amber)':'var(--text3)'}">${p.done}/${p.total}</div>
+              <div style="background:var(--surface3);border-radius:10px;height:4px;margin-top:6px;overflow:hidden">
+                <div style="height:100%;width:${p.pct}%;background:${p.pct===100?'var(--green)':'var(--amber)'};border-radius:10px"></div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <!-- Quick stats -->
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;padding-top:10px;border-top:0.5px solid var(--border)">
+          <span style="color:var(--text3)">Quotes: <strong style="color:var(--text)">${r.quotes.length}</strong></span>
+          <span style="color:var(--text3)">Invoices: <strong style="color:var(--text)">${r.invoices.length}</strong></span>
+          <span style="color:var(--text3)">Revenue: <strong style="color:var(--accent)">${fmtMoney(r.stats.totalClient, r.c.currency||'EUR')}</strong></span>
+          <span style="color:var(--text3)">Profit: <strong style="color:var(--green)">${fmtMoney(r.stats.profit, r.c.currency||'EUR')}</strong></span>
+          <span style="color:var(--text3)">Outstanding: <strong style="color:${r.stats.outstanding>0?'var(--amber)':'var(--green)'}">${fmtMoney(r.stats.outstanding, r.c.currency||'EUR')}</strong></span>
+          <span style="color:var(--text3);margin-left:auto;cursor:pointer;color:var(--accent)" onclick="showPanel('client','${r.c.id}')">View client →</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function exportWorkflowReport() {
+  const statusFilter = document.getElementById('wr-status').value;
+  let filtered = clients;
+  if (statusFilter !== 'all') filtered = filtered.filter(c => c.status === statusFilter);
+  if (!filtered.length) { showToast('No data to export'); return; }
+
+  const allSteps = PHASES.flatMap(p => p.items.map(i => ({ phase: p.name, label: i.label })));
+  const totalSteps = allSteps.length;
+
+  const rows = filtered.map(c => {
+    const checks = lsGet('checks_' + c.id, {});
+    const completedSteps = allSteps.filter(s => checks[s.phase + '|' + s.label]).length;
+    const pct = Math.round((completedSteps / totalSteps) * 100);
+    let currentPhase = 'Not started', currentStep = '—';
+    for (const phase of PHASES) {
+      for (const item of phase.items) {
+        const k = phase.name + '|' + item.label;
+        if (!checks[k]) { currentPhase = phase.name; currentStep = item.label; break; }
+      }
+      if (currentStep !== '—') break;
+    }
+    if (completedSteps === totalSteps) { currentPhase = 'Completed'; currentStep = 'All done'; }
+    const phaseProgress = PHASES.map(phase => {
+      const done = phase.items.filter(i => checks[phase.name+'|'+i.label]).length;
+      return phase.name + ': ' + done + '/' + phase.items.length;
+    }).join(' | ');
+    const stats = calcClientStats(c.id);
+    return { c, completedSteps, pct, currentPhase, currentStep, phaseProgress, stats };
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Production Progress Report</title>
+  <style>body{font-family:sans-serif;padding:32px;color:#111;max-width:900px;margin:0 auto}
+  h1{font-family:serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:28px}
+  .client-block{border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px}
+  .client-name{font-size:18px;font-weight:600;margin-bottom:4px}
+  .current-step{font-size:13px;color:#666;margin-bottom:14px}
+  .progress-bar-wrap{background:#eee;border-radius:20px;height:10px;margin-bottom:6px}
+  .progress-bar{height:100%;border-radius:20px}
+  .pct-label{font-size:12px;color:#888;text-align:right;margin-bottom:14px}
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .phase-box{border:1px solid #eee;border-radius:6px;padding:10px}
+  .phase-name{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:4px}
+  .phase-val{font-size:14px;font-weight:600}
+  .stats-row{font-size:12px;color:#666;border-top:1px solid #eee;padding-top:10px;display:flex;gap:16px;flex-wrap:wrap}
+  .stats-row strong{color:#111}
+  </style></head><body>
+  <h1>The Apparel Co — Production Progress</h1>
+  <p>Generated: ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'})} · Filter: ${statusFilter}</p>
+  ${rows.map(r => {
+    const pctColor = r.pct >= 75 ? '#2d7a4a' : r.pct >= 40 ? '#b07020' : '#b03030';
+    const stats = r.stats;
+    return `<div class="client-block">
+      <div class="client-name">${r.c.brand}${r.c.contact?' <span style="font-weight:400;font-size:14px;color:#666">· '+r.c.contact+'</span>':''}</div>
+      <div class="current-step">${r.currentPhase} → ${r.currentStep}</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:${r.pct}%;background:${pctColor}"></div></div>
+      <div class="pct-label">${r.completedSteps}/${totalSteps} steps · ${r.pct}% complete</div>
+      <div class="phases">${PHASES.map(phase => {
+        const done = phase.items.filter(i => lsGet('checks_'+r.c.id,{})[phase.name+'|'+i.label]).length;
+        const p = Math.round(done/phase.items.length*100);
+        return '<div class="phase-box"><div class="phase-name">'+phase.name+'</div><div class="phase-val" style="color:'+
+          (p===100?'#2d7a4a':p>0?'#b07020':'#aaa')+'">'+done+'/'+phase.items.length+'</div></div>';
+      }).join('')}</div>
+      <div class="stats-row">
+        <span>Revenue: <strong>${fmtMoney(stats.totalClient,r.c.currency||'EUR')}</strong></span>
+        <span>Profit: <strong>${fmtMoney(stats.profit,r.c.currency||'EUR')}</strong></span>
+        <span>Outstanding: <strong>${fmtMoney(stats.outstanding,r.c.currency||'EUR')}</strong></span>
+      </div>
+    </div>`;
+  }).join('')}
+  </body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ApparelCo_Progress_' + today() + '.html'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Progress report exported — open and Print → Save as PDF ✓');
 }
 // KEYBOARD & START
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSlideshow();closeModal('client-modal');closeModal('quote-modal');closeModal('payment-modal');}if(document.getElementById('slideshow').classList.contains('open')){if(e.key==='ArrowLeft')slidePrev();if(e.key==='ArrowRight')slideNext();}});
