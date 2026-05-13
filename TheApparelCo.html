@@ -1421,18 +1421,25 @@ function filterClientsByStatus(arr, filter) {
   if (filter === 'active' || filter === 'sample' || filter === 'done') {
     return arr.filter(c => c.status === filter);
   }
+  // Helper: check if an invoice is fully paid (using amountDue for deposit/balance, totalClient for full)
+  const isInvoicePaid = inv => {
+    const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
+    return (inv.amountPaid || 0) >= due;
+  };
   if (filter === 'unpaid') {
     return arr.filter(c => {
       const invs = lsGet('invoices_'+c.id, []);
       if (!invs.length) return false;
-      return invs.some(inv => (inv.amountPaid||0) < (inv.totalClient||0));
+      // Show clients that have at least one NOT fully paid invoice
+      return invs.some(inv => !isInvoicePaid(inv));
     });
   }
   if (filter === 'paid') {
     return arr.filter(c => {
       const invs = lsGet('invoices_'+c.id, []);
       if (!invs.length) return false;
-      return invs.every(inv => (inv.amountPaid||0) >= (inv.totalClient||0));
+      // Show clients where ALL invoices are fully paid
+      return invs.every(inv => isInvoicePaid(inv));
     });
   }
   return arr;
