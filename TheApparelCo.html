@@ -573,7 +573,39 @@ async function updateStatus(id,status){const c=clients.find(x=>x.id===id);if(!c)
 
 // CLIENT STATS
 function calcClientStats(clientId){const invs=lsGet('invoices_'+clientId,[]);let totalClient=0,totalFactory=0,profit=0,paid=0;invs.forEach(inv=>{totalClient+=(inv.totalClient||0);totalFactory+=(inv.totalFactory||0);profit+=(inv.profit||0);paid+=(inv.amountPaid||0);});return{totalClient,totalFactory,profit,paid,outstanding:totalClient-paid,invoiceCount:invs.length};}
-function renderClientStats(clientId){const s=calcClientStats(clientId);const c=clients.find(x=>x.id===clientId);const cur=c?.currency||'EUR';return '<div class="stat-grid"><div class="stat"><div class="stat-label">Total invoiced</div><div class="stat-val">'+fmtMoney(s.totalClient,cur)+'</div></div><div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">'+fmtMoney(s.totalFactory,cur)+'</div></div><div class="stat"><div class="stat-label">Your profit</div><div class="stat-val green">'+fmtMoney(s.profit,cur)+'</div></div><div class="stat"><div class="stat-label">Paid</div><div class="stat-val green">'+fmtMoney(s.paid,cur)+'</div></div></div><div class="stat-grid"><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(s.outstanding>0?'red':'green')+'">'+fmtMoney(s.outstanding,cur)+'</div></div><div class="stat"><div class="stat-label">Invoices</div><div class="stat-val">'+s.invoiceCount+'</div></div><div class="stat"><div class="stat-label">Commission</div><div class="stat-val">'+(c?.commission||20)+'%</div></div><div class="stat"><div class="stat-label">Quotes</div><div class="stat-val">'+lsGet('quotes_'+clientId,[]).length+'</div></div></div>';}
+function renderClientStats(clientId){
+  const s=calcClientStats(clientId);
+  const c=clients.find(x=>x.id===clientId);
+  const cur=c?.currency||'EUR';
+  const checks = lsGet('checks_'+clientId, {});
+  const allSteps = PHASES.flatMap(p => p.items.map(i => ({phase: p.name, label: i.label})));
+  const completedSteps = allSteps.filter(s => checks[s.phase+'|'+s.label]).length;
+  const pct = Math.round((completedSteps / allSteps.length) * 100);
+  let currentPhase = 'Not started', currentStep = '—';
+  for (const phase of PHASES) {
+    for (const item of phase.items) {
+      const k = phase.name+'|'+item.label;
+      if (!checks[k]) { currentPhase = phase.name; currentStep = item.label; break; }
+    }
+    if (currentStep !== '—') break;
+  }
+  if (completedSteps === allSteps.length) { currentPhase = 'Completed'; currentStep = 'All done ✓'; }
+  const pctColor = pct >= 75 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : pct > 0 ? 'var(--red)' : 'var(--text3)';
+  const phaseProgress = PHASES.map(phase => {
+    const total = phase.items.length;
+    const done = phase.items.filter(i => checks[phase.name+'|'+i.label]).length;
+    return { name: phase.name, done, total, pct: Math.round((done/total)*100) };
+  });
+  
+  return '<div class="stat-grid"><div class="stat"><div class="stat-label">Total invoiced</div><div class="stat-val">'+fmtMoney(s.totalClient,cur)+'</div></div><div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">'+fmtMoney(s.totalFactory,cur)+'</div></div><div class="stat"><div class="stat-label">Your profit</div><div class="stat-val green">'+fmtMoney(s.profit,cur)+'</div></div><div class="stat"><div class="stat-label">Paid</div><div class="stat-val green">'+fmtMoney(s.paid,cur)+'</div></div></div><div class="stat-grid"><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(s.outstanding>0?'red':'green')+'">'+fmtMoney(s.outstanding,cur)+'</div></div><div class="stat"><div class="stat-label">Invoices</div><div class="stat-val">'+s.invoiceCount+'</div></div><div class="stat"><div class="stat-label">Commission</div><div class="stat-val">'+(c?.commission||20)+'%</div></div><div class="stat"><div class="stat-label">Quotes</div><div class="stat-val">'+lsGet('quotes_'+clientId,[]).length+'</div></div></div>'
+  + '<div class="card"><div class="card-header"><span class="card-title">Production progress</span><span style="font-size:11px;color:var(--text3)">' + completedSteps + ' / ' + allSteps.length + ' steps · ' + pct + '%</span></div><div class="card-body">'
+  + '<div style="font-size:13px;margin-bottom:6px"><span style="color:var(--text3)">Current stage:</span> <strong style="color:var(--accent)">' + currentPhase + '</strong> <span style="color:var(--text2)">→ ' + currentStep + '</span></div>'
+  + '<div style="background:var(--surface2);border-radius:20px;height:10px;overflow:hidden;border:0.5px solid var(--border);margin:10px 0 14px">'
+  + '<div style="height:100%;width:' + pct + '%;background:' + pctColor + ';border-radius:20px;transition:width 0.3s"></div></div>'
+  + '<div class="grid4" style="gap:8px">'
+  + phaseProgress.map(p => '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px;border:0.5px solid var(--border)"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">'+p.name+'</div><div style="font-size:14px;font-weight:500;color:'+(p.pct===100?'var(--green)':p.pct>0?'var(--amber)':'var(--text3)')+'">'+p.done+'/'+p.total+'</div><div style="background:var(--surface3);border-radius:10px;height:4px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+p.pct+'%;background:'+(p.pct===100?'var(--green)':'var(--amber)')+';border-radius:10px"></div></div></div>').join('')
+  + '</div></div></div>';
+}
 
 // CLIENT DETAIL
 let currentClientId=null;
@@ -677,11 +709,36 @@ function addQuoteSample(){qSampleIdx++;const wrap=document.getElementById('q-sam
 function getQuoteStyles(){return Array.from(document.querySelectorAll('.style-block[id^="qs-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Style',sizes=inp[1].value||'',units=parseInt(inp[2].value)||0,fp=parseFloat(inp[3].value)||0,co=parseFloat(inp[4].value)||0,ppu=fp*(1+co/100);return{desc,sizes,units,fp,co,ppu,subtotal:ppu*units};});}
 function getQuoteSamples(){return Array.from(document.querySelectorAll('.style-block[id^="qsamp-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Sample',fp=parseFloat(inp[1].value)||0,co=parseFloat(inp[2].value)||100;return{desc,fp,co,total:fp*(1+co/100)};});}
 function updateQuotePreview(){const prev=document.getElementById('q-total-preview');if(!prev)return;const styles=getQuoteStyles(),samples=getQuoteSamples();const iva=parseNum(document.getElementById('q-iva')?.value, 23),ship=parseNum(document.getElementById('q-ship')?.value, 0),cur=document.getElementById('q-cur')?.value||'EUR',s=sym(cur);const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),total=stylesSub+ivaAmt+ship+sampTotal,factoryTotal=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0),profit=total-factoryTotal;prev.innerHTML='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px"><span style="color:var(--text3)">Client total: <strong style="color:var(--accent)">'+s+total.toFixed(2)+'</strong></span><span style="color:var(--text3)">Factory cost: <strong style="color:var(--amber)">'+s+factoryTotal.toFixed(2)+'</strong></span><span style="color:var(--text3)">Your profit: <strong style="color:var(--green)">'+s+profit.toFixed(2)+'</strong></span></div>';}
-function saveNewQuote(){const styles=getQuoteStyles(),samples=getQuoteSamples(),iva=parseNum(document.getElementById('q-iva').value, 23),ship=parseNum(document.getElementById('q-ship').value, 0),cur=document.getElementById('q-cur').value;const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:document.getElementById('q-num').value,date:document.getElementById('q-date').value,validUntil:document.getElementById('q-valid').value,cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(activeQuoteClientId);quotes.unshift(quote);saveClientQuotes(activeQuoteClientId,quotes);closeModal('quote-modal');showToast('Quote saved ✓');renderClientDetail(activeQuoteClientId);}
+function saveNewQuote(){
+  // Confirmation
+  if(!confirm('Create this quote? You can edit it later if needed.')) return;
+  const styles=getQuoteStyles(),samples=getQuoteSamples(),iva=parseNum(document.getElementById('q-iva').value, 23),ship=parseNum(document.getElementById('q-ship').value, 0),cur=document.getElementById('q-cur').value;const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:document.getElementById('q-num').value,date:document.getElementById('q-date').value,validUntil:document.getElementById('q-valid').value,cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(activeQuoteClientId);quotes.unshift(quote);saveClientQuotes(activeQuoteClientId,quotes);closeModal('quote-modal');showToast('Quote saved ✓');renderClientDetail(activeQuoteClientId);
+  // Stay on quotes tab
+  setTimeout(() => {
+    const tab = document.querySelector('#client-content [onclick*="ct-quotes"]');
+    if (tab) switchTab(tab, 'ct-quotes');
+  }, 100);
+}
 function viewQuote(clientId,idx){const c=clients.find(x=>x.id===clientId);const q=getClientQuotes(clientId)[idx];if(!q)return;const s=sym(q.cur||c?.currency||'EUR');document.getElementById('quote-modal-title').textContent='Quote '+q.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">Quote '+q.number+'</div><div class="inv-meta">'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Prepared for</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div>'+(c?.address?'<div style="font-size:12px;color:#666;margin-top:2px">'+c.address+(c.country?', '+c.country:'')+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th style="text-align:right">Total</th></tr></thead><tbody>'+q.styles.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(q.ivaAmt?'<tr><td>IVA ('+q.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+q.ivaAmt.toFixed(2)+'</td></tr>':'')+(q.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+q.ship.toFixed(2)+'</td></tr>':'')+q.samples.map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:220px;margin-left:auto"><div class="inv-total-line grand"><span>Total</span><span>'+s+q.totalClient.toFixed(2)+'</span></div></div><div class="inv-footer">This quote is valid until '+fmtDate(q.validUntil)+'. '+getCompanyInfo().footer+'</div></div><div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px;color:var(--text3)">Status:</span><select class="btn btn-sm" onchange="updateQuoteStatus(\''+clientId+'\','+idx+',this.value)"><option value="pending"'+(q.status==='pending'?' selected':'')+'>Pending</option><option value="accepted"'+(q.status==='accepted'?' selected':'')+'>Accepted</option><option value="rejected"'+(q.status==='rejected'?' selected':'')+'>Rejected</option></select></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadQuotePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadQuoteHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-primary" onclick="convertQuoteToInvoice(\''+clientId+'\','+idx+');closeModal(\'quote-modal\')">Convert to invoice →</button>';document.getElementById('quote-modal').classList.add('open');}
 function updateQuoteStatus(clientId,idx,status){const quotes=getClientQuotes(clientId);if(quotes[idx]){quotes[idx].status=status;saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}}
 function deleteQuote(clientId,idx){if(!confirm('Delete this quote?'))return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
-function convertQuoteToInvoice(clientId,idx){const c=clients.find(x=>x.id===clientId);const q=getClientQuotes(clientId)[idx];if(!q)return;const invNum='TAC-'+Date.now().toString().slice(-5);const inv={id:Date.now(),number:invNum,date:today(),cur:q.cur||c?.currency||'EUR',styles:q.styles,samples:q.samples,iva:q.iva,ship:q.ship,stylesSub:q.stylesSub,ivaAmt:q.ivaAmt,sampTotal:q.sampTotal,totalClient:q.totalClient,totalFactory:q.totalFactory,profit:q.profit,amountPaid:0,payments:[],fromQuote:q.number};const invs=getClientInvoices(clientId);invs.unshift(inv);saveClientInvoices(clientId,invs);document.getElementById('i-num').value=invNum;document.getElementById('i-client').value=c?.brand||'';document.getElementById('i-cur').value=q.cur||'EUR';document.getElementById('i-date').value=today();invoicePayload={garments:q.styles,samples:q.samples,iva:q.iva,fx:0,ship:q.ship,garmentSub:q.stylesSub,ivaAmt:q.ivaAmt,fxAmt:0,prodTotal:q.stylesSub+q.ivaAmt+q.ship,sampTotal:q.sampTotal,grand:q.totalClient,cur:q.cur||'EUR',factoryTotal:q.totalFactory};showToast('Invoice created ✓');renderClientDetail(clientId);showPanel('invoice');buildInvoice();}
+function convertQuoteToInvoice(clientId,idx){
+  if(!confirm('Create an invoice from this quote?')) return;
+  const c=clients.find(x => String(x.id) === String(clientId));
+  const q=getClientQuotes(clientId)[idx];if(!q)return;
+  const co=getCompanyInfo();
+  const prefix=co.invPrefix||'TAC';
+  const invNum=prefix+'-'+Date.now().toString().slice(-5);
+  const inv={id:Date.now(),number:invNum,date:today(),cur:q.cur||c?.currency||'EUR',styles:q.styles,samples:q.samples,iva:q.iva,ship:q.ship,stylesSub:q.stylesSub,ivaAmt:q.ivaAmt,sampTotal:q.sampTotal,totalClient:q.totalClient,totalFactory:q.totalFactory,profit:q.profit,amountPaid:0,payments:[],fromQuote:q.number};
+  const invs=getClientInvoices(clientId);invs.unshift(inv);saveClientInvoices(clientId,invs);
+  showToast('Invoice '+invNum+' created ✓');
+  renderClientDetail(clientId);
+  // Stay on invoices tab
+  setTimeout(() => {
+    const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+    if (tab) switchTab(tab, 'ct-invoices');
+  }, 100);
+}
 
 // PAYMENTS & INVOICE RECORDS
 let activePaymentClientId=null,activePaymentInvIdx=null,activePaymentProof=null;
@@ -702,7 +759,7 @@ function getGarments(){return Array.from(document.querySelectorAll('.style-block
 function getSamples(){return Array.from(document.querySelectorAll('.style-block[id^="sb-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Sample',fp=parseFloat(inp[1].value)||0,co=parseFloat(inp[2].value)||100;return{desc,fp,co,total:fp*(1+co/100)};});}
 function calcPrice(){const iva=parseNum(document.getElementById('p-iva').value, 0),fx=parseNum(document.getElementById('p-fx').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value,s=sym(cur);const garments=getGarments(),samples=getSamples();const garmentSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=garmentSub*(iva/100),fxAmt=garmentSub*(fx/100),prodTotal=garmentSub+ivaAmt+fxAmt+ship,sampTotal=samples.reduce((a,x)=>a+x.total,0),grand=prodTotal+sampTotal,factoryTotal=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0),profit=grand-factoryTotal;document.getElementById('breakdown').innerHTML=(garments.length?garments.map(g=>'<div class="price-row" style="flex-direction:column;align-items:flex-start;gap:1px;padding-bottom:10px"><div style="display:flex;justify-content:space-between;width:100%;font-weight:500">'+g.desc+(g.sizes?' <span style="color:var(--text3);font-size:12px;font-weight:300">('+g.sizes+')</span>':'')+'<span style="color:var(--accent)">'+s+g.subtotal.toFixed(2)+'</span></div><div style="color:var(--text3);font-size:12px">'+g.units+' × '+s+g.ppu.toFixed(2)+'/unit · factory '+s+g.fp.toFixed(2)+' + '+g.co+'% commission</div></div>').join(''):'<div class="price-row" style="color:var(--text3)">No styles added</div>')+'<div class="price-row"><span style="color:var(--text3)">Subtotal</span><span>'+s+garmentSub.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">IVA ('+iva+'%)</span><span>+'+s+ivaAmt.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">FX fee ('+fx+'%)</span><span>+'+s+fxAmt.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">Shipping</span><span>+'+s+ship.toFixed(2)+'</span></div>'+samples.map(x=>'<div class="price-row"><span style="color:var(--text3)">'+x.desc+' (+'+x.co+'% comm)</span><span>+'+s+x.total.toFixed(2)+'</span></div>').join('')+'<div class="price-row grand"><span>Grand total</span><span>'+s+grand.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--green)">Your profit</span><span style="color:var(--green)">'+s+profit.toFixed(2)+'</span></div>';document.getElementById('s-prod').textContent=s+prodTotal.toFixed(2);document.getElementById('s-samp').textContent=s+sampTotal.toFixed(2);document.getElementById('s-grand').textContent=s+grand.toFixed(2);invoicePayload={garments,iva,fx,ship,garmentSub,ivaAmt,fxAmt,prodTotal,samples,sampTotal,grand,cur,factoryTotal,profit};}
 function pushToInvoice(){const cid=document.getElementById('p-client').value;const c=clients.find(x=>x.id==cid);if(c){document.getElementById('i-client').value=c.brand;document.getElementById('i-cur').value=invoicePayload.cur||'EUR';}document.getElementById('i-date').value=today();showPanel('invoice');buildInvoice();}
-function saveAsQuote(){const cid=document.getElementById('p-client').value;if(!cid){showToast('Select a client first');return;}activeQuoteClientId=cid;const garments=getGarments(),samples=getSamples(),iva=parseNum(document.getElementById('p-iva').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value;const stylesSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:'Q-'+Date.now().toString().slice(-4),date:today(),validUntil:new Date(Date.now()+14*86400000).toISOString().split('T')[0],cur,iva,ship,styles:garments,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(cid);quotes.unshift(quote);saveClientQuotes(cid,quotes);showToast('Quote saved to client ✓');showPanel('client',cid);setTimeout(()=>{const qTab=document.querySelector('[onclick*="ct-quotes"]');if(qTab)qTab.click();},300);}
+function saveAsQuote(){const cid=document.getElementById('p-client').value;if(!cid){showToast('Select a client first');return;}if(!confirm('Save this as a quote for the client?'))return;activeQuoteClientId=cid;const garments=getGarments(),samples=getSamples(),iva=parseNum(document.getElementById('p-iva').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value;const stylesSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:'Q-'+Date.now().toString().slice(-4),date:today(),validUntil:new Date(Date.now()+14*86400000).toISOString().split('T')[0],cur,iva,ship,styles:garments,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(cid);quotes.unshift(quote);saveClientQuotes(cid,quotes);showToast('Quote saved to client ✓');showPanel('client',cid);setTimeout(()=>{const qTab=document.querySelector('[onclick*="ct-quotes"]');if(qTab)qTab.click();},300);}
 
 // INVOICE PANEL
 function buildInvoice(){const d=invoicePayload,cur=document.getElementById('i-cur').value,s=sym(cur);const client=document.getElementById('i-client').value||'—',num=document.getElementById('i-num').value||'TAC-001',date=document.getElementById('i-date').value||today();const due=parseNum(document.getElementById('i-due').value, 14),terms=document.getElementById('i-terms').value;const dueDate=new Date(date);dueDate.setDate(dueDate.getDate()+due);const dueDateStr=dueDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});const cid=document.getElementById('p-client')?.value,cl=clients.find(x=>x.id==cid);const hasData=d.garments&&d.garments.length>0;document.getElementById('invoice-preview').innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number">'+num+'</div><div class="inv-meta">'+date+'<br>Due: '+dueDateStr+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+client+'</div>'+(cl?.address?'<div style="font-size:12px;color:#666;margin-top:2px">'+cl.address+(cl.country?', '+cl.country:'')+'</div>':'')+(cl?.vat?'<div style="font-size:12px;color:#999">VAT: '+cl.vat+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(hasData?d.garments.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join(''):'')+(hasData&&d.ivaAmt?'<tr><td>IVA ('+d.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+d.ivaAmt.toFixed(2)+'</td></tr>':'')+(hasData&&d.fxAmt?'<tr><td>FX fee ('+d.fx+'%)</td><td></td><td></td><td style="text-align:right">'+s+d.fxAmt.toFixed(2)+'</td></tr>':'')+(hasData&&d.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+d.ship.toFixed(2)+'</td></tr>':'')+(d.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+(!hasData&&!(d.samples||[]).length?'<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">Go to Pricing → Generate invoice</td></tr>':'')+'</tbody></table><hr class="inv-hr"><div style="max-width:220px;margin-left:auto"><div class="inv-total-line grand"><span>Total</span><span>'+s+(d.grand||0).toFixed(2)+'</span></div><div class="inv-total-line"><span>50% deposit</span><span>'+s+((d.grand||0)/2).toFixed(2)+'</span></div><div class="inv-total-line"><span>50% before dispatch</span><span>'+s+((d.grand||0)/2).toFixed(2)+'</span></div></div><div class="inv-footer">Payment terms: '+terms+'<br>'+getCompanyInfo().footer+'</div><div style="margin-top:14px;padding-top:14px;border-top:0.5px solid #eee"><button class="btn btn-sm btn-primary" onclick="saveInvoiceToClient()" style="background:var(--accent);color:#0f0f0f;border-color:var(--accent)">Save to client record</button></div>';}
@@ -1080,8 +1137,38 @@ function createBlankInvoiceFromScratch(clientId) {
 }
 
 function useQuoteForInvoice(clientId, quoteIdx) {
+  const q = getClientQuotes(clientId)[quoteIdx];
+  if (!q) return;
+  if (!confirm('Create an invoice from quote ' + q.number + '?')) return;
   closeModal('quote-modal');
-  createInvoiceFromQuote(clientId, quoteIdx);
+  createInvoiceFromQuoteDirect(clientId, quoteIdx);
+}
+function createInvoiceFromQuoteDirect(clientId, idx) {
+  const c = clients.find(x => String(x.id) === String(clientId));
+  const q = getClientQuotes(clientId)[idx];
+  if (!q) return;
+  const co = getCompanyInfo();
+  const prefix = co.invPrefix || 'TAC';
+  const inv = {
+    id: Date.now(),
+    number: prefix + '-' + Date.now().toString().slice(-5),
+    date: today(),
+    cur: q.cur || c?.currency || 'EUR',
+    styles: q.styles, samples: q.samples,
+    iva: q.iva, ship: q.ship,
+    stylesSub: q.stylesSub, ivaAmt: q.ivaAmt, sampTotal: q.sampTotal,
+    totalClient: q.totalClient, totalFactory: q.totalFactory, profit: q.profit,
+    amountPaid: 0, payments: [], fromQuote: q.number
+  };
+  const invs = getClientInvoices(clientId);
+  invs.unshift(inv);
+  saveClientInvoices(clientId, invs);
+  showToast('Invoice ' + inv.number + ' created ✓');
+  renderClientDetail(clientId);
+  setTimeout(() => {
+    const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+    if (tab) switchTab(tab, 'ct-invoices');
+  }, 100);
 }
 
 function combineQuotesIntoInvoice(clientId) {
@@ -1089,6 +1176,7 @@ function combineQuotesIntoInvoice(clientId) {
   if (!c) return;
   const checkboxes = document.querySelectorAll('.multi-q-cb:checked');
   if (!checkboxes.length) { showToast('Select at least one quote'); return; }
+  if (!confirm('Combine ' + checkboxes.length + ' quote' + (checkboxes.length>1?'s':'') + ' into a single invoice?')) return;
   const selectedIdxs = Array.from(checkboxes).map(cb => parseInt(cb.dataset.idx));
   const quotes = getClientQuotes(clientId);
   const selectedQuotes = selectedIdxs.map(i => quotes[i]).filter(Boolean);
