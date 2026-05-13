@@ -419,6 +419,17 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
       </div>
       <div class="card">
+        <div class="card-header"><span class="card-title">Turnaround benchmarks</span><span style="font-size:11px;color:var(--text3)">days — green if ≤ fast, red if ≥ slow</span></div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Set what counts as fast or slow for each production milestone. These drive the colour coding on your dashboard and reports.</div>
+          <div id="benchmarks-form"></div>
+          <div style="margin-top:14px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="saveBenchmarkSettings()">Save benchmarks</button>
+            <button class="btn btn-sm" onclick="resetBenchmarkSettings()">Reset to defaults</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header"><span class="card-title">Appearance</span></div>
         <div class="card-body">
           <label style="margin-bottom:10px;display:block">Theme</label>
@@ -631,7 +642,7 @@ function downloadBackup(){const data={exported:new Date().toISOString(),version:
 function checkDailyBackup(){const last=localStorage.getItem('last_backup_date');if(last!==new Date().toDateString()&&clients.length>0){setTimeout(()=>showToast('Daily backup ready — click ⬇ Backup',6000),5000);}}
 
 // INIT
-async function showApp(){document.getElementById('connect-screen').style.display='none';document.getElementById('app').style.display='grid';setSyncStatus(driveConnected?'syncing':'local');if(driveConnected){try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}catch{await loadAllClients();setSyncStatus('offline');}}else{await loadAllClients();setSyncStatus('local');}clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});renderSidebarClients();renderDashboard();populatePriceClients();document.getElementById('i-date').value=today();const from=new Date();from.setMonth(from.getMonth()-3);document.getElementById('rep-from').value=from.toISOString().split('T')[0];document.getElementById('rep-to').value=today();if(document.getElementById('tax-from')){document.getElementById('tax-from').value=from.toISOString().split('T')[0];document.getElementById('tax-to').value=today();}buildInvoice();addGarment();calcPrice();checkDailyBackup();loadLogo();loadCompanyInfo();}
+async function showApp(){document.getElementById('connect-screen').style.display='none';document.getElementById('app').style.display='grid';setSyncStatus(driveConnected?'syncing':'local');if(driveConnected){try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}catch{await loadAllClients();setSyncStatus('offline');}}else{await loadAllClients();setSyncStatus('local');}clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});renderSidebarClients();renderDashboard();populatePriceClients();document.getElementById('i-date').value=today();const from=new Date();from.setMonth(from.getMonth()-3);document.getElementById('rep-from').value=from.toISOString().split('T')[0];document.getElementById('rep-to').value=today();if(document.getElementById('tax-from')){document.getElementById('tax-from').value=from.toISOString().split('T')[0];document.getElementById('tax-to').value=today();}buildInvoice();addGarment();calcPrice();checkDailyBackup();loadLogo();loadCompanyInfo();Object.assign(BENCHMARKS, loadBenchmarks());}
 
 // THEMES
 function setTheme(theme){
@@ -671,7 +682,7 @@ function fmtMoney(n,cur){return sym(cur||'EUR')+(n||0).toFixed(2);}
 function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 
 // PANELS
-function showPanel(name,clientId){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings')loadCompanyInfo();if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}}
+function showPanel(name,clientId){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}}
 
 // DASHBOARD
 function renderDashboard(){
@@ -1621,6 +1632,81 @@ function filterClientsByStatus(arr, filter) {
 }
 
 
+
+// BENCHMARK SETTINGS
+const DEFAULT_BENCHMARKS = {
+  techpackToSample:        { fast: 14, slow: 28,  label: 'Tech pack → Sample ready' },
+  sampleTurnaround:        { fast: 10, slow: 21,  label: 'Factory briefed → Sample ready' },
+  sampleToApproval:        { fast: 5,  slow: 14,  label: 'Sample ready → Approved' },
+  approvalToBulk:          { fast: 7,  slow: 14,  label: 'Sample approved → Bulk started' },
+  bulkProduction:          { fast: 30, slow: 60,  label: 'Bulk started → QC done' },
+  qcToDispatch:            { fast: 5,  slow: 14,  label: 'QC → Dispatched' },
+  totalOnboardToDispatch:  { fast: 60, slow: 100, label: 'Tech pack → Dispatched' },
+  techpackToDelivery:      { fast: 75, slow: 120, label: 'Tech pack → Delivered' }
+};
+
+function loadBenchmarks() {
+  const saved = lsGet('tac_benchmarks', null);
+  if (!saved) return DEFAULT_BENCHMARKS;
+  // Merge with defaults in case new metrics were added
+  const merged = {};
+  Object.keys(DEFAULT_BENCHMARKS).forEach(k => {
+    merged[k] = {
+      fast:  saved[k]?.fast  ?? DEFAULT_BENCHMARKS[k].fast,
+      slow:  saved[k]?.slow  ?? DEFAULT_BENCHMARKS[k].slow,
+      label: DEFAULT_BENCHMARKS[k].label
+    };
+  });
+  return merged;
+}
+
+function saveBenchmarkSettings() {
+  const saved = {};
+  Object.keys(DEFAULT_BENCHMARKS).forEach(k => {
+    const fastEl = document.getElementById('bm-fast-'+k);
+    const slowEl = document.getElementById('bm-slow-'+k);
+    if (fastEl && slowEl) {
+      saved[k] = {
+        fast: parseNum(fastEl.value, DEFAULT_BENCHMARKS[k].fast),
+        slow: parseNum(slowEl.value, DEFAULT_BENCHMARKS[k].slow)
+      };
+    }
+  });
+  lsSet('tac_benchmarks', saved);
+  // Refresh the live BENCHMARKS object
+  Object.assign(BENCHMARKS, loadBenchmarks());
+  showToast('Benchmarks saved ✓');
+  renderBenchmarksForm();
+}
+
+function resetBenchmarkSettings() {
+  localStorage.removeItem('tac_benchmarks');
+  Object.assign(BENCHMARKS, DEFAULT_BENCHMARKS);
+  renderBenchmarksForm();
+  showToast('Benchmarks reset to defaults ✓');
+}
+
+function renderBenchmarksForm() {
+  const el = document.getElementById('benchmarks-form');
+  if (!el) return;
+  const b = loadBenchmarks();
+  el.innerHTML = Object.keys(b).map(k => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:150px;font-size:13px;color:var(--text2)">${b[k].label}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-size:11px;color:var(--green)">Fast ≤</span>
+        <input id="bm-fast-${k}" type="number" value="${b[k].fast}" style="width:64px;padding:5px 8px;font-size:13px">
+        <span style="font-size:11px;color:var(--text3)">days</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-size:11px;color:var(--red)">Slow ≥</span>
+        <input id="bm-slow-${k}" type="number" value="${b[k].slow}" style="width:64px;padding:5px 8px;font-size:13px">
+        <span style="font-size:11px;color:var(--text3)">days</span>
+      </div>
+    </div>`).join('');
+}
+
+
 // ════════════════════════════════════════════════════════
 // PRODUCTION METRICS
 // ════════════════════════════════════════════════════════
@@ -1639,7 +1725,7 @@ const METRIC_STEPS = {
 };
 
 // Benchmark targets (in days) for colour coding
-const BENCHMARKS = {
+let BENCHMARKS = {
   techpackToSample: { fast: 14, slow: 28, label: 'Tech pack → Sample ready' },
   sampleTurnaround: { fast: 10, slow: 21, label: 'Factory briefed → Sample ready' },
   sampleToApproval: { fast: 5, slow: 14, label: 'Sample ready → Approved' },
