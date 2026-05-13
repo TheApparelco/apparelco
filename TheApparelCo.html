@@ -285,19 +285,41 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     </div>
     <div class="panel" id="panel-reports">
       <div class="panel-title">Reports</div>
-      <div class="card"><div class="card-body">
-        <div class="grid3" style="align-items:flex-end">
-          <div class="field"><label>From date</label><input id="rep-from" type="date"></div>
-          <div class="field"><label>To date</label><input id="rep-to" type="date"></div>
-          <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Has unpaid invoices</option><option value="paid">All invoices paid</option></select></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="generateReport()">Generate report</button>
-          <button class="btn" onclick="exportReport('csv')">Export CSV</button>
-          <button class="btn" onclick="exportReport('pdf')">Export PDF</button>
-        </div>
-      </div></div>
-      <div id="report-output"></div>
+      <div class="tabs" style="margin-bottom:14px">
+        <button class="tab active" onclick="switchReportTab(this,'rep-financial')">Financial</button>
+        <button class="tab" onclick="switchReportTab(this,'rep-taxes')">Taxes</button>
+      </div>
+      <div id="rep-financial">
+        <div class="card"><div class="card-body">
+          <div class="grid3" style="align-items:flex-end">
+            <div class="field"><label>From date</label><input id="rep-from" type="date"></div>
+            <div class="field"><label>To date</label><input id="rep-to" type="date"></div>
+            <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Has unpaid invoices</option><option value="paid">All invoices paid</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="generateReport()">Generate report</button>
+            <button class="btn" onclick="exportReport('csv')">Export CSV</button>
+            <button class="btn" onclick="exportReport('pdf')">Export PDF</button>
+          </div>
+        </div></div>
+        <div id="report-output"></div>
+      </div>
+      <div id="rep-taxes" style="display:none">
+        <div class="card"><div class="card-body">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">Generate a tax report based on profit from <strong style="color:var(--text2)">paid invoices only</strong>. Set your tax rate below — taxes are calculated as a percentage of your profit per invoice.</div>
+          <div class="grid3" style="align-items:flex-end">
+            <div class="field"><label>From date</label><input id="tax-from" type="date"></div>
+            <div class="field"><label>To date</label><input id="tax-to" type="date"></div>
+            <div class="field"><label>Tax rate (%)</label><input id="tax-rate" type="number" value="23" step="0.01" placeholder="e.g. 23"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="generateTaxReport()">Generate tax report</button>
+            <button class="btn" onclick="exportTaxReport('csv')">Export CSV</button>
+            <button class="btn" onclick="exportTaxReport('pdf')">Export PDF</button>
+          </div>
+        </div></div>
+        <div id="tax-output"></div>
+      </div>
     </div>
     <div class="panel" id="panel-workflow-report">
       <div class="panel-title">Production progress</div>
@@ -527,7 +549,7 @@ function downloadBackup(){const data={exported:new Date().toISOString(),version:
 function checkDailyBackup(){const last=localStorage.getItem('last_backup_date');if(last!==new Date().toDateString()&&clients.length>0){setTimeout(()=>showToast('Daily backup ready — click ⬇ Backup',6000),5000);}}
 
 // INIT
-async function showApp(){document.getElementById('connect-screen').style.display='none';document.getElementById('app').style.display='grid';setSyncStatus(driveConnected?'syncing':'local');if(driveConnected){try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}catch{await loadAllClients();setSyncStatus('offline');}}else{await loadAllClients();setSyncStatus('local');}clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});renderSidebarClients();renderDashboard();populatePriceClients();document.getElementById('i-date').value=today();const from=new Date();from.setMonth(from.getMonth()-3);document.getElementById('rep-from').value=from.toISOString().split('T')[0];document.getElementById('rep-to').value=today();buildInvoice();addGarment();calcPrice();checkDailyBackup();loadLogo();loadCompanyInfo();}
+async function showApp(){document.getElementById('connect-screen').style.display='none';document.getElementById('app').style.display='grid';setSyncStatus(driveConnected?'syncing':'local');if(driveConnected){try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}catch{await loadAllClients();setSyncStatus('offline');}}else{await loadAllClients();setSyncStatus('local');}clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});renderSidebarClients();renderDashboard();populatePriceClients();document.getElementById('i-date').value=today();const from=new Date();from.setMonth(from.getMonth()-3);document.getElementById('rep-from').value=from.toISOString().split('T')[0];document.getElementById('rep-to').value=today();if(document.getElementById('tax-from')){document.getElementById('tax-from').value=from.toISOString().split('T')[0];document.getElementById('tax-to').value=today();}buildInvoice();addGarment();calcPrice();checkDailyBackup();loadLogo();loadCompanyInfo();}
 
 // THEMES
 function setTheme(theme){
@@ -570,7 +592,14 @@ function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-
 function showPanel(name,clientId){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings')loadCompanyInfo();if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}}
 
 // DASHBOARD
-function renderDashboard(){const el=document.getElementById('dashboard-content');if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0;clients.forEach(c=>{lsGet('invoices_'+c.id,[]).forEach(inv=>{totR+=(inv.totalClient||0);totP+=(inv.profit||0);});});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+clients.length+')</span><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div><div>'+clients.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';}
+function renderDashboard(){
+  const el=document.getElementById('dashboard-content');
+  const filterVal = document.getElementById('dashboard-filter')?.value || 'all';
+  const filtered = filterClientsByStatus(clients, filterVal);
+  if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0;clients.forEach(c=>{lsGet('invoices_'+c.id,[]).forEach(inv=>{totR+=(inv.totalClient||0);totP+=(inv.profit||0);});});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
+  // Restore filter selection
+  setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
+}
 function renderSidebarClients(){
   const filter = document.getElementById('sidebar-filter')?.value || 'all';
   const filtered = filterClientsByStatus(clients, filter);
@@ -605,7 +634,28 @@ async function deleteClient(id){if(!confirm('Delete this client and all data?'))
 async function updateStatus(id,status){const c=clients.find(x=>x.id===id);if(!c)return;c.status=status;await saveClientData(c);renderSidebarClients();renderDashboard();renderClientDetail(id);}
 
 // CLIENT STATS
-function calcClientStats(clientId){const invs=lsGet('invoices_'+clientId,[]);let totalClient=0,totalFactory=0,profit=0,paid=0;invs.forEach(inv=>{totalClient+=(inv.totalClient||0);totalFactory+=(inv.totalFactory||0);profit+=(inv.profit||0);paid+=(inv.amountPaid||0);});return{totalClient,totalFactory,profit,paid,outstanding:totalClient-paid,invoiceCount:invs.length};}
+function calcClientStats(clientId){
+  const invs=lsGet('invoices_'+clientId,[]);
+  let totalClient=0,totalFactory=0,profit=0,paid=0,totalDue=0;
+  invs.forEach(inv=>{
+    // For deposit/balance invoices, count the actual amount due to client (not full order total)
+    // But profit and factory cost relate to the full order, so only count once per quote/order
+    const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient||0);
+    totalDue += due;
+    paid += (inv.amountPaid||0);
+    // Don't double-count when a deposit + balance both reference same order
+    // Best approximation: count full totalClient/profit/factory only on full or balance invoice
+    if (inv.invType === 'deposit') {
+      // skip totalClient/profit for stats so we don't double count
+    } else {
+      totalClient += (inv.totalClient||0);
+      totalFactory += (inv.totalFactory||0);
+      profit += (inv.profit||0);
+    }
+  });
+  // Use totalDue as the basis for outstanding
+  return{totalClient,totalFactory,profit,paid,outstanding:totalDue-paid,invoiceCount:invs.length};
+}
 function renderClientStats(clientId){
   const s=calcClientStats(clientId);
   const c=clients.find(x=>x.id===clientId);
@@ -662,7 +712,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
 +'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(inv.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -778,8 +828,8 @@ async function convertQuoteToInvoice(clientId,idx){
 
 // PAYMENTS & INVOICE RECORDS
 let activePaymentClientId=null,activePaymentInvIdx=null,activePaymentProof=null;
-function viewInvoiceRecord(clientId,idx){const invs=getClientInvoices(clientId);const inv=invs[idx];if(!inv)return;const c=clients.find(x=>x.id===clientId);const s=sym(inv.cur||c?.currency||'EUR');const totalPaid=inv.amountPaid||0;document.getElementById('quote-modal-title').textContent='Invoice '+inv.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">'+inv.number+'</div><div class="inv-meta">'+fmtDate(inv.date)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div></div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(inv.ivaAmt?'<tr><td>IVA</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'')+(inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')+(inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:220px;margin-left:auto"><div class="inv-total-line grand"><span>Total</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div><div class="inv-total-line" style="color:'+(totalPaid>=(inv.totalClient||0)?'#4a7':'#c84')+'"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div><div class="inv-total-line"><span>Outstanding</span><span>'+s+Math.max(0,inv.totalClient-totalPaid).toFixed(2)+'</span></div></div></div>'+(inv.payments?.length?'<div style="margin-top:12px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Payment history</div>'+inv.payments.map(p=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span>'+fmtDate(p.date)+' · '+(p.method||'Transfer')+'</span><span style="color:var(--green)">'+s+p.amount.toFixed(2)+'</span></div>').join('')+'</div>':'');document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadInvoicePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadInvoiceHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-green" onclick="closeModal(\'quote-modal\');openPaymentModal(\''+clientId+'\','+idx+')">+ Add payment</button>';document.getElementById('quote-modal').classList.add('open');}
-function openPaymentModal(clientId,invIdx){activePaymentClientId=clientId;activePaymentInvIdx=invIdx;activePaymentProof=null;const invs=getClientInvoices(clientId);const inv=invs[invIdx];const c=clients.find(x=>x.id===clientId);const s=sym(inv.cur||c?.currency||'EUR');const remaining=Math.max(0,(inv.totalClient||0)-(inv.amountPaid||0));document.getElementById('payment-modal-body').innerHTML='<div style="margin-bottom:14px;font-size:13px;color:var(--text3)">Invoice '+inv.number+' · Outstanding: <strong style="color:var(--amber)">'+s+remaining.toFixed(2)+'</strong></div><div class="grid2"><div class="field"><label>Amount paid</label><input id="pay-amount" type="number" step="0.01" value="'+remaining.toFixed(2)+'"></div><div class="field"><label>Date</label><input id="pay-date" type="date" value="'+today()+'"></div></div><div class="field"><label>Payment method</label><select id="pay-method"><option>Bank transfer</option><option>PayPal</option><option>Wise</option><option>Cash</option><option>Other</option></select></div><div class="field"><label>Notes</label><input id="pay-notes" placeholder="Optional reference"></div><div class="upload-zone" onclick="document.getElementById(\'payment-proof-input\').click()" style="margin-top:8px"><div style="font-size:18px;margin-bottom:4px">📎</div><div style="font-size:12px;color:var(--text3)" id="proof-label">Upload proof of payment (optional)</div></div>';document.getElementById('payment-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'payment-modal\')">Cancel</button><button class="btn btn-primary" onclick="savePayment()">Save payment</button>';document.getElementById('payment-modal').classList.add('open');}
+function viewInvoiceRecord(clientId,idx){const invs=getClientInvoices(clientId);const inv=invs[idx];if(!inv)return;const c=clients.find(x=>String(x.id)===String(clientId));const s=sym(inv.cur||c?.currency||'EUR');const totalPaid=inv.amountPaid||0;const amountDue=inv.amountDue!=null?inv.amountDue:inv.totalClient;document.getElementById('quote-modal-title').textContent='Invoice '+inv.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">'+inv.number+'</div><div class="inv-meta">'+fmtDate(inv.date)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div></div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(inv.ivaAmt?'<tr><td>IVA</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'')+(inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')+(inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:280px;margin-left:auto">'+(inv.typeLabel?'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:right">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</div>':'')+'<div class="inv-total-line"><span>Order total</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div>'+(inv.invType==='deposit'?'<div class="inv-total-line grand"><span>Amount due now (50%)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Balance due before dispatch</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':inv.invType==='balance'?'<div class="inv-total-line grand"><span>Amount due now (50% Balance)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Deposit previously paid</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':'<div class="inv-total-line grand"><span>Total due</span><span>'+s+amountDue.toFixed(2)+'</span></div>')+'<div class="inv-total-line" style="color:'+(totalPaid>=amountDue?'#4a7':'#c84')+'"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div><div class="inv-total-line"><span>Outstanding</span><span>'+s+Math.max(0,amountDue-totalPaid).toFixed(2)+'</span></div></div></div>'+(inv.payments?.length?'<div style="margin-top:12px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Payment history</div>'+inv.payments.map(p=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span>'+fmtDate(p.date)+' · '+(p.method||'Transfer')+'</span><span style="color:var(--green)">'+s+p.amount.toFixed(2)+'</span></div>').join('')+'</div>':'');document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadInvoicePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadInvoiceHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-green" onclick="closeModal(\'quote-modal\');openPaymentModal(\''+clientId+'\','+idx+')">+ Add payment</button>';document.getElementById('quote-modal').classList.add('open');}
+function openPaymentModal(clientId,invIdx){activePaymentClientId=clientId;activePaymentInvIdx=invIdx;activePaymentProof=null;const invs=getClientInvoices(clientId);const inv=invs[invIdx];const c=clients.find(x=>x.id===clientId);const s=sym(inv.cur||c?.currency||'EUR');const dueAmt=inv.amountDue!=null?inv.amountDue:(inv.totalClient||0);const remaining=Math.max(0,dueAmt-(inv.amountPaid||0));document.getElementById('payment-modal-body').innerHTML='<div style="margin-bottom:14px;font-size:13px;color:var(--text3)">Invoice '+inv.number+' · Outstanding: <strong style="color:var(--amber)">'+s+remaining.toFixed(2)+'</strong></div><div class="grid2"><div class="field"><label>Amount paid</label><input id="pay-amount" type="number" step="0.01" value="'+remaining.toFixed(2)+'"></div><div class="field"><label>Date</label><input id="pay-date" type="date" value="'+today()+'"></div></div><div class="field"><label>Payment method</label><select id="pay-method"><option>Bank transfer</option><option>PayPal</option><option>Wise</option><option>Cash</option><option>Other</option></select></div><div class="field"><label>Notes</label><input id="pay-notes" placeholder="Optional reference"></div><div class="upload-zone" onclick="document.getElementById(\'payment-proof-input\').click()" style="margin-top:8px"><div style="font-size:18px;margin-bottom:4px">📎</div><div style="font-size:12px;color:var(--text3)" id="proof-label">Upload proof of payment (optional)</div></div>';document.getElementById('payment-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'payment-modal\')">Cancel</button><button class="btn btn-primary" onclick="savePayment()">Save payment</button>';document.getElementById('payment-modal').classList.add('open');}
 function handlePaymentProof(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{activePaymentProof={name:file.name,data:ev.target.result,size:file.size};document.getElementById('proof-label').textContent='✓ '+file.name;};reader.readAsDataURL(file);e.target.value='';}
 async function savePayment(){const amount=parseNum(document.getElementById('pay-amount').value, 0);const date=document.getElementById('pay-date').value;const method=document.getElementById('pay-method').value;const notes=document.getElementById('pay-notes').value;const invs=getClientInvoices(activePaymentClientId);const inv=invs[activePaymentInvIdx];if(!inv)return;if(!inv.payments)inv.payments=[];const payment={id:Date.now(),amount,date,method,notes};if(activePaymentProof){payment.proof=activePaymentProof.name;await saveFileData(activePaymentClientId,'paymentproofs',activePaymentProof.name,activePaymentProof.data);}inv.payments.push(payment);inv.amountPaid=(inv.amountPaid||0)+amount;saveClientInvoices(activePaymentClientId,invs);closeModal('payment-modal');showToast('Payment recorded ✓');renderClientDetail(activePaymentClientId);renderDashboard();}
 function deleteInvoiceRecord(clientId,idx){if(!confirm('Delete this invoice record?'))return;const invs=getClientInvoices(clientId);invs.splice(idx,1);saveClientInvoices(clientId,invs);renderClientDetail(clientId);}
@@ -1024,11 +1074,17 @@ function renderInvoiceDoc(clientId, idx) {
   const s = sym(inv.cur||c?.currency||'EUR');
   const logo = getLogoHtml(false);
   const totalPaid = inv.amountPaid||0;
-  const outstanding = Math.max(0, (inv.totalClient||0) - totalPaid);
+  const outstanding = Math.max(0, (inv.amountDue != null ? inv.amountDue : (inv.totalClient||0)) - totalPaid);
 
+  // Calculate amounts based on invoice type
+  const amountDue = inv.amountDue != null ? inv.amountDue : inv.totalClient;
+  const typeLabel = inv.typeLabel || '';
+  
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
     '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
-    '<div style="text-align:right"><div class="inv-number">'+inv.number+'</div><div class="inv-meta">'+fmtDate(inv.date)+'</div></div>' +
+    '<div style="text-align:right"><div class="inv-number">'+inv.number+'</div>' +
+    (typeLabel?'<div style="font-size:11px;color:#888;letter-spacing:0.08em;text-transform:uppercase;margin-top:2px">'+typeLabel.trim().replace(/[()]/g,'')+'</div>':'') +
+    '<div class="inv-meta">'+fmtDate(inv.date)+'</div></div>' +
     '</div>' +
     '<hr class="inv-hr">' +
     '<div style="margin-bottom:18px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div>' +
@@ -1042,8 +1098,11 @@ function renderInvoiceDoc(clientId, idx) {
     (inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('') +
     '</tbody></table>' +
     '<hr class="inv-hr">' +
-    '<div style="max-width:240px;margin-left:auto">' +
-    '<div class="inv-total-line grand"><span>Total</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div>' +
+    '<div style="max-width:280px;margin-left:auto">' +
+    '<div class="inv-total-line"><span>Order total</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div>' +
+    (inv.invType === 'deposit' ? '<div class="inv-total-line grand" style="color:#111"><span>Amount due now (50% Deposit)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999;font-style:italic"><span>Balance due before dispatch</span><span>'+s+(inv.totalClient - amountDue).toFixed(2)+'</span></div>' : 
+     inv.invType === 'balance' ? '<div class="inv-total-line grand" style="color:#111"><span>Amount due now (50% Balance)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999;font-style:italic"><span>Deposit previously paid</span><span>'+s+(inv.totalClient - amountDue).toFixed(2)+'</span></div>' :
+     '<div class="inv-total-line grand"><span>Total due</span><span>'+s+amountDue.toFixed(2)+'</span></div>') +
     (totalPaid>0?'<div class="inv-total-line" style="color:#4a7"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div>':'') +
     (outstanding>0?'<div class="inv-total-line"><span>Outstanding</span><span>'+s+outstanding.toFixed(2)+'</span></div>':'') +
     '</div>' +
@@ -1107,18 +1166,29 @@ function openInvoiceCreator(clientId) {
   const cur = c.currency || 'EUR';
   const s = sym(cur);
   
-  let html = '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">How would you like to create the invoice for <strong style="color:var(--text)">' + c.brand + '</strong>?</div>';
+  let html = '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Creating invoice for <strong style="color:var(--text)">' + c.brand + '</strong></div>';
+  
+  // Payment type selector at the top
+  html += '<div style="margin-bottom:18px;padding:14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm)">';
+  html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:10px">Invoice type</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--surface);border:0.5px solid var(--border)"><input type="radio" name="inv-type" value="deposit" checked style="width:auto;margin:0"><div><div style="font-weight:500">50% Deposit</div><div style="font-size:11px;color:var(--text3)">First invoice — paid before production starts</div></div></label>';
+  html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--surface);border:0.5px solid var(--border)"><input type="radio" name="inv-type" value="balance" style="width:auto;margin:0"><div><div style="font-weight:500">50% Balance</div><div style="font-size:11px;color:var(--text3)">Final invoice — paid before dispatch</div></div></label>';
+  html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--surface);border:0.5px solid var(--border)"><input type="radio" name="inv-type" value="full" style="width:auto;margin:0"><div><div style="font-weight:500">Pay in full</div><div style="font-size:11px;color:var(--text3)">Single invoice for the entire amount</div></div></label>';
+  html += '</div></div>';
+  
+  // Source selector
+  html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin:10px 0 10px">Source</div>';
   
   // Blank invoice option
   html += '<div class="card-tap" style="padding:14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:8px;display:flex;align-items:center;gap:12px" onclick="createBlankInvoiceFromScratch(\''+clientId+'\')">';
   html += '<div style="font-size:22px">📝</div>';
-  html += '<div style="flex:1"><div style="font-weight:500;font-size:14px">Blank invoice</div><div style="font-size:11px;color:var(--text3)">Start fresh — add styles and samples manually</div></div>';
+  html += '<div style="flex:1"><div style="font-weight:500;font-size:14px">Start blank</div><div style="font-size:11px;color:var(--text3)">Add styles manually in Pricing</div></div>';
   html += '<div style="color:var(--accent);font-size:18px">→</div>';
   html += '</div>';
   
   // Quote options
   if (quotes.length) {
-    html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;font-weight:500">Or use an existing quote</div>';
     quotes.forEach((q, i) => {
       const statusColor = q.status === 'accepted' ? 'var(--green)' : q.status === 'rejected' ? 'var(--red)' : 'var(--amber)';
       html += '<div class="card-tap" style="padding:12px 14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:6px;display:flex;align-items:center;gap:12px" onclick="useQuoteForInvoice(\''+clientId+'\','+i+')">';
@@ -1134,7 +1204,7 @@ function openInvoiceCreator(clientId) {
     if (quotes.length >= 2) {
       html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;font-weight:500">Or combine multiple quotes</div>';
       html += '<div style="background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:14px">';
-      html += '<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Select quotes to merge into one invoice:</div>';
+      html += '<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Select quotes to merge:</div>';
       html += '<div id="multi-quote-list">';
       quotes.forEach((q, i) => {
         html += '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;font-size:13px;border-bottom:0.5px solid var(--border)">';
@@ -1155,6 +1225,12 @@ function openInvoiceCreator(clientId) {
   document.getElementById('quote-modal-body').innerHTML = html;
   document.getElementById('quote-modal-actions').innerHTML = '<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button>';
   document.getElementById('quote-modal').classList.add('open');
+}
+
+// Helper: get selected payment type from invoice creator
+function getSelectedInvoiceType() {
+  const sel = document.querySelector('input[name="inv-type"]:checked');
+  return sel ? sel.value : 'full';
 }
 
 function createBlankInvoiceFromScratch(clientId) {
@@ -1184,8 +1260,14 @@ async function createInvoiceFromQuoteDirect(clientId, idx) {
   const c = clients.find(x => String(x.id) === String(clientId));
   const q = getClientQuotes(clientId)[idx];
   if (!q) return;
+  const invType = getSelectedInvoiceType();
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
+  const fullTotal = q.totalClient;
+  let amountDue = fullTotal;
+  let typeLabel = '';
+  if (invType === 'deposit') { amountDue = fullTotal / 2; typeLabel = ' (50% Deposit)'; }
+  else if (invType === 'balance') { amountDue = fullTotal / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
     number: prefix + '-' + Date.now().toString().slice(-5),
@@ -1194,13 +1276,17 @@ async function createInvoiceFromQuoteDirect(clientId, idx) {
     styles: q.styles, samples: q.samples,
     iva: q.iva, ship: q.ship,
     stylesSub: q.stylesSub, ivaAmt: q.ivaAmt, sampTotal: q.sampTotal,
-    totalClient: q.totalClient, totalFactory: q.totalFactory, profit: q.profit,
+    totalClient: fullTotal,
+    amountDue: amountDue,
+    invType: invType,
+    typeLabel: typeLabel,
+    totalFactory: q.totalFactory, profit: q.profit,
     amountPaid: 0, payments: [], fromQuote: q.number
   };
   const invs = getClientInvoices(clientId);
   invs.unshift(inv);
   saveClientInvoices(clientId, invs);
-  showToast('Invoice ' + inv.number + ' created ✓');
+  showToast('Invoice ' + inv.number + typeLabel + ' created ✓');
   await renderClientDetail(clientId);
   const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
   if (tab) switchTab(tab, 'ct-invoices');
@@ -1236,6 +1322,11 @@ async function combineQuotesIntoInvoice(clientId) {
   
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
+  const invType = getSelectedInvoiceType();
+  let amountDue = totalClient;
+  let typeLabel = '';
+  if (invType === 'deposit') { amountDue = totalClient / 2; typeLabel = ' (50% Deposit)'; }
+  else if (invType === 'balance') { amountDue = totalClient / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
     number: prefix + '-' + Date.now().toString().slice(-5),
@@ -1244,7 +1335,11 @@ async function combineQuotesIntoInvoice(clientId) {
     styles: combinedStyles, samples: combinedSamples,
     iva: ivaPct, ship: totalShip,
     stylesSub, ivaAmt, sampTotal,
-    totalClient, totalFactory, profit: totalClient - totalFactory,
+    totalClient,
+    amountDue: amountDue,
+    invType: invType,
+    typeLabel: typeLabel,
+    totalFactory, profit: totalClient - totalFactory,
     amountPaid: 0, payments: [],
     fromQuotes: selectedQuotes.map(q => q.number).join(', ')
   };
@@ -1535,6 +1630,169 @@ function themedConfirm(title, msg, okLabel, icon) {
 function resolveConfirm(answer) {
   document.getElementById('confirm-modal').classList.remove('open');
   if (_confirmResolve) { _confirmResolve(answer); _confirmResolve = null; }
+}
+
+
+// REPORT TAB SWITCHING
+function switchReportTab(btn, tabId) {
+  document.querySelectorAll('#panel-reports .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['rep-financial','rep-taxes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === tabId ? 'block' : 'none';
+  });
+  // Default dates if empty
+  if (tabId === 'rep-taxes') {
+    if (!document.getElementById('tax-from').value) {
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      document.getElementById('tax-from').value = yearStart.toISOString().split('T')[0];
+    }
+    if (!document.getElementById('tax-to').value) {
+      document.getElementById('tax-to').value = today();
+    }
+  }
+}
+
+// TAX REPORT
+function calcTaxData() {
+  const from = document.getElementById('tax-from').value;
+  const to = document.getElementById('tax-to').value;
+  const taxRate = parseNum(document.getElementById('tax-rate').value, 0);
+  const fromDate = from ? new Date(from) : new Date(0);
+  const toDate = to ? new Date(to) : new Date();
+  toDate.setHours(23, 59, 59);
+
+  const rows = [];
+  clients.forEach(c => {
+    const invs = lsGet('invoices_' + c.id, []);
+    invs.forEach(inv => {
+      // Only paid invoices (fully paid)
+      const amountDue = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
+      const paid = inv.amountPaid || 0;
+      if (paid < amountDue) return; // skip unpaid/partial
+      // Use latest payment date as the "paid date"
+      const paidDate = inv.payments && inv.payments.length 
+        ? new Date(Math.max(...inv.payments.map(p => new Date(p.date).getTime())))
+        : new Date(inv.date);
+      if (paidDate < fromDate || paidDate > toDate) return;
+
+      // Profit: For deposit invoices we already excluded from totalClient elsewhere
+      // For this report, profit is calculated proportionally to amount paid
+      const orderProfit = inv.profit || 0;
+      const orderTotal = inv.totalClient || 0;
+      // Pro-rate profit by what this invoice covers (deposit/balance/full)
+      let invProfit = 0;
+      if (inv.invType === 'deposit' || inv.invType === 'balance') {
+        invProfit = orderProfit / 2;
+      } else {
+        invProfit = orderProfit;
+      }
+      const taxAmount = invProfit * (taxRate / 100);
+
+      rows.push({
+        clientName: c.brand,
+        clientId: c.id,
+        invNumber: inv.number,
+        invType: inv.typeLabel ? inv.typeLabel.replace(/[()]/g, '').trim() : 'Full',
+        paidDate: paidDate,
+        currency: inv.cur || c.currency || 'EUR',
+        amountPaid: paid,
+        profit: invProfit,
+        tax: taxAmount
+      });
+    });
+  });
+  rows.sort((a, b) => a.paidDate - b.paidDate);
+  return { rows, taxRate, from, to };
+}
+
+function generateTaxReport() {
+  const { rows, taxRate, from, to } = calcTaxData();
+  const el = document.getElementById('tax-output');
+  if (!rows.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)">No paid invoices in this date range</div>';
+    return;
+  }
+  let totalPaid = 0, totalProfit = 0, totalTax = 0;
+  rows.forEach(r => { totalPaid += r.amountPaid; totalProfit += r.profit; totalTax += r.tax; });
+
+  el.innerHTML = '<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Paid invoices</div><div class="stat-val">' + rows.length + '</div></div><div class="stat"><div class="stat-label">Revenue collected</div><div class="stat-val green">€' + totalPaid.toFixed(0) + '</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€' + totalProfit.toFixed(0) + '</div></div><div class="stat"><div class="stat-label">Tax (' + taxRate + '%)</div><div class="stat-val amber">€' + totalTax.toFixed(0) + '</div></div></div>'
+    + '<div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Paid date</th><th>Client</th><th>Invoice #</th><th>Type</th><th style="text-align:right">Amount paid</th><th style="text-align:right">Profit</th><th style="text-align:right">Tax (' + taxRate + '%)</th></tr></thead><tbody>'
+    + rows.map(r => '<tr><td style="color:var(--text3)">' + fmtDate(r.paidDate) + '</td><td style="font-weight:500;cursor:pointer;color:var(--accent)" onclick="showPanel(\'client\',\'' + r.clientId + '\')">' + r.clientName + '</td><td>' + r.invNumber + '</td><td><span class="badge-xs" style="background:var(--surface3);color:var(--text2);border:0.5px solid var(--border2)">' + r.invType + '</span></td><td style="text-align:right">' + fmtMoney(r.amountPaid, r.currency) + '</td><td style="text-align:right;color:var(--green)">' + fmtMoney(r.profit, r.currency) + '</td><td style="text-align:right;color:var(--amber)">' + fmtMoney(r.tax, r.currency) + '</td></tr>').join('')
+    + '</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€' + totalPaid.toFixed(2) + '</td><td style="text-align:right;color:var(--green)">€' + totalProfit.toFixed(2) + '</td><td style="text-align:right;color:var(--amber)">€' + totalTax.toFixed(2) + '</td></tr></tfoot></table></div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:12px;padding:12px;background:var(--surface);border-radius:var(--radius-sm);border:0.5px solid var(--border);line-height:1.6">'
+    + '<strong style="color:var(--text2)">Note:</strong> This report covers paid invoices only. Tax is calculated as ' + taxRate + '% of your profit per invoice. For deposit and balance invoices, profit is split proportionally (50% each). Always consult an accountant — this is a guide, not legal tax advice.'
+    + '</div>';
+}
+
+function exportTaxReport(format) {
+  const { rows, taxRate, from, to } = calcTaxData();
+  if (!rows.length) { showToast('No paid invoices to export'); return; }
+  let totalPaid = 0, totalProfit = 0, totalTax = 0;
+  rows.forEach(r => { totalPaid += r.amountPaid; totalProfit += r.profit; totalTax += r.tax; });
+
+  if (format === 'csv') {
+    const headers = ['Paid date', 'Client', 'Invoice #', 'Type', 'Currency', 'Amount paid', 'Profit', 'Tax (' + taxRate + '%)'];
+    const lines = [headers.join(',')];
+    rows.forEach(r => {
+      lines.push([
+        r.paidDate.toISOString().split('T')[0],
+        '"' + r.clientName + '"',
+        r.invNumber,
+        '"' + r.invType + '"',
+        r.currency,
+        r.amountPaid.toFixed(2),
+        r.profit.toFixed(2),
+        r.tax.toFixed(2)
+      ].join(','));
+    });
+    lines.push(['TOTAL','','','','', totalPaid.toFixed(2), totalProfit.toFixed(2), totalTax.toFixed(2)].join(','));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'TaxReport_' + today() + '.csv'; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Tax CSV exported ✓');
+    return;
+  }
+
+  // PDF (HTML) export
+  const co = getCompanyInfo();
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tax Report</title>'
+    + '<style>body{font-family:sans-serif;padding:32px;color:#111;max-width:900px;margin:0 auto;line-height:1.5}'
+    + 'h1{font-family:serif;font-size:24px;margin-bottom:4px}'
+    + 'h2{font-size:14px;color:#666;margin-bottom:24px;font-weight:400}'
+    + '.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}'
+    + '.summary-box{border:1px solid #ddd;border-radius:6px;padding:12px;text-align:center}'
+    + '.summary-label{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}'
+    + '.summary-val{font-size:18px;font-weight:600}'
+    + 'table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}'
+    + 'th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.05em}'
+    + 'td{padding:8px 6px;border-bottom:1px solid #eee;vertical-align:top}'
+    + 'tfoot td{font-weight:600;border-top:2px solid #ddd;padding-top:12px}'
+    + '.right{text-align:right}.green{color:#2d7a4a}.amber{color:#b07020}'
+    + '.note{margin-top:18px;padding:12px;background:#f7f4ee;border-radius:6px;font-size:11px;color:#777;border-left:3px solid #c8b89a}'
+    + '@media print{body{padding:20px}@page{margin:1cm;size:A4 landscape}}'
+    + '</style></head><body>'
+    + '<h1>' + (co.name || 'The Apparel Co') + ' — Tax Report</h1>'
+    + '<h2>Period: ' + (from || 'All time') + ' to ' + (to || today()) + ' · Tax rate: ' + taxRate + '%</h2>'
+    + '<div class="summary">'
+    + '<div class="summary-box"><div class="summary-label">Paid invoices</div><div class="summary-val">' + rows.length + '</div></div>'
+    + '<div class="summary-box"><div class="summary-label">Revenue collected</div><div class="summary-val green">€' + totalPaid.toFixed(0) + '</div></div>'
+    + '<div class="summary-box"><div class="summary-label">Total profit</div><div class="summary-val green">€' + totalProfit.toFixed(0) + '</div></div>'
+    + '<div class="summary-box"><div class="summary-label">Tax owed</div><div class="summary-val amber">€' + totalTax.toFixed(0) + '</div></div>'
+    + '</div>'
+    + '<table><thead><tr><th>Paid date</th><th>Client</th><th>Invoice #</th><th>Type</th><th class="right">Amount paid</th><th class="right">Profit</th><th class="right">Tax (' + taxRate + '%)</th></tr></thead><tbody>'
+    + rows.map(r => '<tr><td>' + r.paidDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + '</td><td>' + r.clientName + '</td><td>' + r.invNumber + '</td><td>' + r.invType + '</td><td class="right">' + fmtMoney(r.amountPaid, r.currency) + '</td><td class="right green">' + fmtMoney(r.profit, r.currency) + '</td><td class="right amber">' + fmtMoney(r.tax, r.currency) + '</td></tr>').join('')
+    + '</tbody><tfoot><tr><td colspan="4">TOTAL</td><td class="right">€' + totalPaid.toFixed(2) + '</td><td class="right green">€' + totalProfit.toFixed(2) + '</td><td class="right amber">€' + totalTax.toFixed(2) + '</td></tr></tfoot></table>'
+    + '<div class="note"><strong>Note:</strong> This report covers paid invoices only. Tax is calculated as ' + taxRate + '% of profit per invoice. For deposit and balance invoices, profit is split proportionally (50% each). This is an internal guide — always consult an accountant for filing.</div>'
+    + '<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>'
+    + '</body></html>';
+  const w = window.open('', '_blank');
+  if (!w) { showToast('Pop-up blocked — allow pop-ups to print'); return; }
+  w.document.write(html);
+  w.document.close();
+  showToast('Tax report opened — Print or Save as PDF ✓');
 }
 
 // KEYBOARD & START
