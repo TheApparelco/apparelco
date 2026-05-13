@@ -623,21 +623,27 @@ const PHASES=[
 ];
 function renderWorkflow(clientId,checks,quotes){const stepFiles=lsGet('stepfiles_'+clientId,{});const sentQuotes=(quotes||[]).filter(q=>q.status==='accepted'||q.status==='pending');return PHASES.map(phase=>'<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">'+phase.items.map(item=>{const k=phase.name+'|'+item.label;const done=!!checks[k];const files=stepFiles[k]||[];const isQuoteStep=item.label==='Quote sent to client';return '<div><div class="check-row"><div class="check-box'+(done?' on':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')" ></div><span class="check-text'+(done?' done':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')"> '+item.label+'</span>'+(isQuoteStep&&sentQuotes.length?'<span style="font-size:11px;color:var(--green);margin-left:6px">'+sentQuotes.length+' quote'+(sentQuotes.length>1?'s':'')+'</span>':'')+(item.upload?'<button class="btn btn-xs btn-ghost" onclick="triggerStepUpload(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')">📎'+(files.length?' '+files.length:'')+'</button>':'')+'</div>'+(files.length?'<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+f.name+'</span><span class="file-chip-del" onclick="delStepFile(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\','+fi+')">✕</span></div>').join('')+'</div>':'')+'</div>';}).join('')+'</div></div>').join('');}
 async function toggleCheck(clientId,key){
-  const checks=await loadChecksData(clientId);
-  checks[key]=!checks[key];
-  await saveChecksData(clientId,checks);
-  // Find currently active tab to restore after re-render
-  const activeTab=document.querySelector('#client-content .tab.active');
-  const activeTabOnclick=activeTab?activeTab.getAttribute('onclick'):null;
-  await renderClientDetail(clientId);
-  // Restore active tab
-  if(activeTabOnclick){
-    const m=activeTabOnclick.match(/'(ct-[^']+)'/);
-    if(m){
-      const targetId=m[1];
-      const newTab=Array.from(document.querySelectorAll('#client-content .tab')).find(t=>t.getAttribute('onclick')?.includes("'"+targetId+"'"));
-      if(newTab)switchTab(newTab,targetId);
+  // 1. Read from local cache (instant)
+  const checks = lsGet('checks_'+clientId, {});
+  checks[key] = !checks[key];
+  // 2. Save to local instantly
+  lsSet('checks_'+clientId, checks);
+  // 3. Find active tab BEFORE re-render
+  const activeTab = document.querySelector('#client-content .tab.active');
+  const activeTabOnclick = activeTab ? activeTab.getAttribute('onclick') : null;
+  // 4. Update just the checkbox visually first (instant feedback)
+  const checkboxes = document.querySelectorAll('.check-box');
+  checkboxes.forEach(cb => {
+    const onclick = cb.getAttribute('onclick') || '';
+    if (onclick.includes(key.replace(/'/g, "\\'"))) {
+      cb.classList.toggle('on', checks[key]);
+      const text = cb.parentElement.querySelector('.check-text');
+      if (text) text.classList.toggle('done', checks[key]);
     }
+  });
+  // 5. Save to Drive in background (non-blocking)
+  if (driveConnected) {
+    driveUploadJSON('checks_'+clientId+'.json', checks).catch(() => queueForSync('checks_'+clientId+'.json'));
   }
 }
 let activeStepClient=null,activeStepKey=null;
@@ -995,12 +1001,140 @@ function createInvoiceFromQuote(clientId, quoteIdx) {
 
 // Create blank invoice for a client
 function createBlankInvoiceForClient(clientId) {
-  const c = clients.find(x=>x.id===clientId);
+  // Use loose equality - client IDs are stored as numbers but passed as strings
+  const c = clients.find(x => String(x.id) === String(clientId));
+  if (!c) { showToast('Client not found'); return; }
+  openInvoiceCreator(clientId);
+}
+
+function openInvoiceCreator(clientId) {
+  const c = clients.find(x => String(x.id) === String(clientId));
   if (!c) return;
-  // Open pricing page with this client pre-selected
-  document.getElementById('p-client').value = clientId;
-  onPriceClient();
-  showPanel('pricing');
+  const quotes = getClientQuotes(clientId);
+  const cur = c.currency || 'EUR';
+  const s = sym(cur);
+  
+  let html = '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">How would you like to create the invoice for <strong style="color:var(--text)">' + c.brand + '</strong>?</div>';
+  
+  // Blank invoice option
+  html += '<div class="card-tap" style="padding:14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:8px;display:flex;align-items:center;gap:12px" onclick="createBlankInvoiceFromScratch(\''+clientId+'\')">';
+  html += '<div style="font-size:22px">📝</div>';
+  html += '<div style="flex:1"><div style="font-weight:500;font-size:14px">Blank invoice</div><div style="font-size:11px;color:var(--text3)">Start fresh — add styles and samples manually</div></div>';
+  html += '<div style="color:var(--accent);font-size:18px">→</div>';
+  html += '</div>';
+  
+  // Quote options
+  if (quotes.length) {
+    html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;font-weight:500">Or use an existing quote</div>';
+    quotes.forEach((q, i) => {
+      const statusColor = q.status === 'accepted' ? 'var(--green)' : q.status === 'rejected' ? 'var(--red)' : 'var(--amber)';
+      html += '<div class="card-tap" style="padding:12px 14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:6px;display:flex;align-items:center;gap:12px" onclick="useQuoteForInvoice(\''+clientId+'\','+i+')">';
+      html += '<div style="font-size:18px">📄</div>';
+      html += '<div style="flex:1"><div style="font-weight:500;font-size:13px">' + q.number + ' <span style="font-weight:300;color:var(--text3);font-size:11px">· ' + fmtDate(q.date) + '</span></div>';
+      html += '<div style="font-size:11px;color:var(--text3)">' + (q.styles?.length||0) + ' style' + (q.styles?.length!==1?'s':'') + ' · <span style="color:'+statusColor+'">' + (q.status||'pending') + '</span></div></div>';
+      html += '<div style="text-align:right;font-size:13px;font-weight:500;color:var(--accent)">' + s + q.totalClient.toFixed(2) + '</div>';
+      html += '<div style="color:var(--accent);font-size:18px">→</div>';
+      html += '</div>';
+    });
+    
+    // Multi-quote option if 2+
+    if (quotes.length >= 2) {
+      html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;font-weight:500">Or combine multiple quotes</div>';
+      html += '<div style="background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:14px">';
+      html += '<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Select quotes to merge into one invoice:</div>';
+      html += '<div id="multi-quote-list">';
+      quotes.forEach((q, i) => {
+        html += '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;font-size:13px;border-bottom:0.5px solid var(--border)">';
+        html += '<input type="checkbox" class="multi-q-cb" data-idx="'+i+'" style="width:auto;margin:0">';
+        html += '<span style="flex:1">'+q.number+' <span style="color:var(--text3);font-size:11px">· '+(q.styles?.length||0)+' styles</span></span>';
+        html += '<span style="color:var(--accent);font-weight:500">'+s+q.totalClient.toFixed(2)+'</span>';
+        html += '</label>';
+      });
+      html += '</div>';
+      html += '<button class="btn btn-primary btn-block" style="margin-top:12px" onclick="combineQuotesIntoInvoice(\''+clientId+'\')">Combine selected → Create invoice</button>';
+      html += '</div>';
+    }
+  } else {
+    html += '<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px 0">No quotes saved for this client yet</div>';
+  }
+  
+  document.getElementById('quote-modal-title').textContent = 'Create invoice';
+  document.getElementById('quote-modal-body').innerHTML = html;
+  document.getElementById('quote-modal-actions').innerHTML = '<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button>';
+  document.getElementById('quote-modal').classList.add('open');
+}
+
+function createBlankInvoiceFromScratch(clientId) {
+  const c = clients.find(x => String(x.id) === String(clientId));
+  if (!c) return;
+  closeModal('quote-modal');
+  // Pre-select client in Pricing
+  setTimeout(() => {
+    const sel = document.getElementById('p-client');
+    if (sel) {
+      sel.value = clientId;
+      onPriceClient();
+    }
+    showPanel('pricing');
+  }, 100);
+}
+
+function useQuoteForInvoice(clientId, quoteIdx) {
+  closeModal('quote-modal');
+  createInvoiceFromQuote(clientId, quoteIdx);
+}
+
+function combineQuotesIntoInvoice(clientId) {
+  const c = clients.find(x => String(x.id) === String(clientId));
+  if (!c) return;
+  const checkboxes = document.querySelectorAll('.multi-q-cb:checked');
+  if (!checkboxes.length) { showToast('Select at least one quote'); return; }
+  const selectedIdxs = Array.from(checkboxes).map(cb => parseInt(cb.dataset.idx));
+  const quotes = getClientQuotes(clientId);
+  const selectedQuotes = selectedIdxs.map(i => quotes[i]).filter(Boolean);
+  
+  // Combine all styles, samples, and totals
+  const combinedStyles = [];
+  const combinedSamples = [];
+  let totalShip = 0, ivaPct = 23;
+  selectedQuotes.forEach(q => {
+    (q.styles || []).forEach(g => combinedStyles.push({...g}));
+    (q.samples || []).forEach(x => combinedSamples.push({...x}));
+    totalShip += (q.ship || 0);
+    if (q.iva != null) ivaPct = q.iva;
+  });
+  
+  const stylesSub = combinedStyles.reduce((a, g) => a + g.subtotal, 0);
+  const ivaAmt = stylesSub * (ivaPct / 100);
+  const sampTotal = combinedSamples.reduce((a, x) => a + x.total, 0);
+  const totalClient = stylesSub + ivaAmt + totalShip + sampTotal;
+  const totalFactory = combinedStyles.reduce((a, g) => a + g.fp * g.units, 0) + combinedSamples.reduce((a, x) => a + x.fp, 0);
+  
+  const co = getCompanyInfo();
+  const prefix = co.invPrefix || 'TAC';
+  const inv = {
+    id: Date.now(),
+    number: prefix + '-' + Date.now().toString().slice(-5),
+    date: today(),
+    cur: selectedQuotes[0].cur || c.currency || 'EUR',
+    styles: combinedStyles, samples: combinedSamples,
+    iva: ivaPct, ship: totalShip,
+    stylesSub, ivaAmt, sampTotal,
+    totalClient, totalFactory, profit: totalClient - totalFactory,
+    amountPaid: 0, payments: [],
+    fromQuotes: selectedQuotes.map(q => q.number).join(', ')
+  };
+  
+  const invs = getClientInvoices(clientId);
+  invs.unshift(inv);
+  saveClientInvoices(clientId, invs);
+  closeModal('quote-modal');
+  showToast('Invoice ' + inv.number + ' created from ' + selectedQuotes.length + ' quote' + (selectedQuotes.length > 1 ? 's' : '') + ' ✓');
+  renderClientDetail(clientId);
+  setTimeout(() => {
+    const invTab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+    if (invTab) switchTab(invTab, 'ct-invoices');
+  }, 200);
 }
 
 
