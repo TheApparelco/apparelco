@@ -288,6 +288,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="tabs" style="margin-bottom:14px">
         <button class="tab active" onclick="switchReportTab(this,'rep-financial')">Financial</button>
         <button class="tab" onclick="switchReportTab(this,'rep-taxes')">Taxes</button>
+        <button class="tab" onclick="switchReportTab(this,'rep-metrics')">Turnaround</button>
       </div>
       <div id="rep-financial">
         <div class="card"><div class="card-body">
@@ -319,6 +320,16 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           </div>
         </div></div>
         <div id="tax-output"></div>
+      </div>
+      <div id="rep-metrics" style="display:none">
+        <div class="card"><div class="card-body">
+          <div class="grid3" style="align-items:flex-end">
+            <div class="field"><label>Period</label><select id="metrics-rep-period"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div>
+            <div class="field"><label>Status filter</label><select id="metrics-rep-status"><option value="active">Active orders</option><option value="all">All clients</option><option value="done">Completed orders</option></select></div>
+            <div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="generateMetricsReport()">Generate</button><button class="btn" onclick="exportMetricsReport()">Export PDF</button></div>
+          </div>
+        </div></div>
+        <div id="metrics-rep-output"></div>
       </div>
     </div>
     <div class="panel" id="panel-workflow-report">
@@ -436,6 +447,18 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <div class="overlay" id="quote-modal"><div class="modal" style="width:700px"><div class="modal-title" id="quote-modal-title">Quote</div><div id="quote-modal-body"></div><div class="modal-actions" id="quote-modal-actions"></div></div></div>
 <div class="overlay" id="payment-modal"><div class="modal" style="width:480px"><div class="modal-title">Mark payment</div><div id="payment-modal-body"></div><div class="modal-actions" id="payment-modal-actions"></div></div></div>
 
+<div class="overlay" id="date-prompt-modal" style="z-index:10001">
+  <div class="modal" style="width:380px;padding:24px">
+    <div class="modal-title" style="font-size:17px;margin-bottom:6px">When did this happen?</div>
+    <div id="date-prompt-step" style="font-size:13px;color:var(--text2);margin-bottom:14px;font-style:italic"></div>
+    <div class="field"><label>Date</label><input type="date" id="date-prompt-input"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="resolveDatePrompt(false)">Cancel</button>
+      <button class="btn btn-primary" onclick="resolveDatePrompt(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="confirm-modal" style="z-index:10000">
   <div class="modal" style="width:380px;text-align:center;padding:28px 24px">
     <div style="font-size:36px;margin-bottom:12px" id="confirm-icon">✓</div>
@@ -523,12 +546,71 @@ function lsSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch
 
 // DATA LAYER
 let clients=[],syncQueue=[];
-async function loadAllClients(){if(!driveConnected){clients=lsGet('tac_clients',[]);return;}const manifest=await driveDownloadJSON('manifest.json').catch(()=>null);if(!manifest?.clients){clients=lsGet('tac_clients',[]);return;}const loaded=[];for(const id of manifest.clients){const c=await driveDownloadJSON('client_'+id+'.json').catch(()=>null);if(c)loaded.push(c);}clients=loaded.sort((a,b)=>(a.brand||'').localeCompare(b.brand||''));lsSet('tac_clients',clients);}
-async function saveClientData(client){const idx=clients.findIndex(x=>x.id===client.id);if(idx>=0)clients[idx]=client;else clients.push(client);lsSet('tac_clients',clients);if(driveConnected){try{await driveUploadJSON('client_'+client.id+'.json',client);await saveManifest();setSyncStatus('synced');}catch{queueForSync('client_'+client.id+'.json');setSyncStatus('offline');}}}
+async function loadAllClients(){
+  if (!driveConnected) { clients = lsGet('tac_clients', []); return; }
+  // Source of truth: scan Drive for actual client_*.json files
+  // This avoids ghosts from a stale manifest
+  const clientFiles = Object.keys(fileIndex).filter(name => /^client_\d+\.json$/.test(name));
+  const loaded = [];
+  for (const filename of clientFiles) {
+    const c = await driveDownloadJSON(filename).catch(() => null);
+    if (c && c.id) loaded.push(c);
+  }
+  clients = loaded.sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+  lsSet('tac_clients', clients);
+  // Rebuild manifest to match reality
+  try { await saveManifest(); } catch(e) {}
+}
+async function saveClientData(client){const idx=clients.findIndex(x=>String(x.id)===String(client.id));if(idx>=0)clients[idx]=client;else clients.push(client);lsSet('tac_clients',clients);if(driveConnected){try{await driveUploadJSON('client_'+client.id+'.json',client);await saveManifest();setSyncStatus('synced');}catch{queueForSync('client_'+client.id+'.json');setSyncStatus('offline');}}}
 async function saveManifest(){await driveUploadJSON('manifest.json',{clients:clients.map(c=>c.id),updated:new Date().toISOString()});}
-async function deleteClientData(id){clients=clients.filter(x=>x.id!==id);lsSet('tac_clients',clients);if(driveConnected){try{await driveDeleteFile('client_'+id+'.json');await saveManifest();}catch{}}Object.keys(localStorage).filter(k=>k.startsWith('file_'+id+'_')||k.startsWith('checks_'+id)||k.startsWith('stepfiles_'+id)||k.startsWith('quotes_'+id)||k.startsWith('invoices_'+id)).forEach(k=>localStorage.removeItem(k));}
+async function deleteClientData(id){
+  // Use loose comparison so string/number IDs both match
+  clients = clients.filter(x => String(x.id) !== String(id));
+  lsSet('tac_clients', clients);
+  // Remove all related local storage entries
+  Object.keys(localStorage).filter(k => 
+    k.startsWith('file_'+id+'_') || 
+    k.startsWith('checks_'+id) || 
+    k.startsWith('stepfiles_'+id) || 
+    k.startsWith('quotes_'+id) || 
+    k.startsWith('invoices_'+id)
+  ).forEach(k => localStorage.removeItem(k));
+  // Update Drive if connected - and make sure manifest saves
+  if (driveConnected) {
+    try {
+      await driveDeleteFile('client_'+id+'.json');
+    } catch(e) { console.warn('Drive delete failed:', e); }
+    try {
+      await saveManifest();
+    } catch(e) {
+      console.warn('Manifest save failed:', e);
+      queueForSync('manifest.json');
+    }
+    // Also delete checks/quotes/invoices/files from Drive
+    const filesToDelete = Object.keys(fileIndex).filter(name =>
+      name === 'client_'+id+'.json' ||
+      name === 'checks_'+id+'.json' ||
+      name.startsWith('file_'+id+'_') ||
+      name.startsWith('stepfile_'+id+'_')
+    );
+    for (const fn of filesToDelete) {
+      try { await driveDeleteFile(fn); } catch(e) {}
+    }
+  }
+}
 async function saveChecksData(clientId,data){lsSet('checks_'+clientId,data);if(driveConnected){try{await driveUploadJSON('checks_'+clientId+'.json',data);}catch{queueForSync('checks_'+clientId+'.json');}}}
-async function loadChecksData(clientId){if(driveConnected){try{const d=await driveDownloadJSON('checks_'+clientId+'.json');if(d){lsSet('checks_'+clientId,d);return d;}}catch{}}return lsGet('checks_'+clientId,{});}
+async function loadChecksData(clientId){
+  if (driveConnected) {
+    try { 
+      const d = await driveDownloadJSON('checks_'+clientId+'.json'); 
+      if (d) { lsSet('checks_'+clientId, d); }
+      const dates = await driveDownloadJSON('checkdates_'+clientId+'.json');
+      if (dates) lsSet('checkdates_'+clientId, dates);
+      if (d) return d;
+    } catch {}
+  }
+  return lsGet('checks_'+clientId, {});
+}
 async function saveFileData(clientId,category,filename,dataUrl){const key='file_'+clientId+'_'+category+'_'+filename;lsSet(key,{name:filename,data:dataUrl,size:dataUrl.length,ts:Date.now()});const c=clients.find(x=>x.id===clientId);if(c){if(!c.fileIndex)c.fileIndex={};if(!c.fileIndex[category])c.fileIndex[category]=[];if(!c.fileIndex[category].includes(filename))c.fileIndex[category].push(filename);await saveClientData(c);}if(driveConnected){try{await driveUploadBinary('file_'+clientId+'_'+category+'_'+filename,dataUrl);setSyncStatus('synced');}catch{queueForSync('file_'+clientId+'_'+category+'_'+filename);}}}
 function listFilesData(clientId,category){const c=clients.find(x=>x.id===clientId);const names=c?.fileIndex?.[category]||[];return names.map(name=>{const s=lsGet('file_'+clientId+'_'+category+'_'+name,null);return{name,size:s?.size||0,data:s?.data||null};});}
 async function deleteFileData(clientId,category,filename){localStorage.removeItem('file_'+clientId+'_'+category+'_'+filename);const c=clients.find(x=>x.id===clientId);if(c?.fileIndex?.[category]){c.fileIndex[category]=c.fileIndex[category].filter(n=>n!==filename);await saveClientData(c);}if(driveConnected){try{await driveDeleteFile('file_'+clientId+'_'+category+'_'+filename);}catch{}}}
@@ -596,7 +678,7 @@ function renderDashboard(){
   const el=document.getElementById('dashboard-content');
   const filterVal = document.getElementById('dashboard-filter')?.value || 'all';
   const filtered = filterClientsByStatus(clients, filterVal);
-  if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0;clients.forEach(c=>{lsGet('invoices_'+c.id,[]).forEach(inv=>{totR+=(inv.totalClient||0);totP+=(inv.profit||0);});});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
+  if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0;clients.forEach(c=>{lsGet('invoices_'+c.id,[]).forEach(inv=>{totR+=(inv.totalClient||0);totP+=(inv.profit||0);});});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
@@ -630,7 +712,19 @@ async function saveClient(){
   if(editingId)renderClientDetail(editingId);
   btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';
 }
-async function deleteClient(id){if(!confirm('Delete this client and all data?'))return;await deleteClientData(id);renderSidebarClients();renderDashboard();showPanel('dashboard');}
+async function deleteClient(id) {
+  const ok = await themedConfirm('Delete client?', 'This will permanently delete the client and all their data (quotes, invoices, photos, files). This cannot be undone.', 'Delete', '⚠️');
+  if (!ok) return;
+  // Update local state and UI INSTANTLY
+  clients = clients.filter(x => String(x.id) !== String(id));
+  lsSet('tac_clients', clients);
+  renderSidebarClients();
+  renderDashboard();
+  showPanel('dashboard');
+  showToast('Client deleted ✓');
+  // Then handle drive cleanup in background
+  deleteClientData(id).catch(e => console.warn('Delete cleanup error:', e));
+}
 async function updateStatus(id,status){const c=clients.find(x=>x.id===id);if(!c)return;c.status=status;await saveClientData(c);renderSidebarClients();renderDashboard();renderClientDetail(id);}
 
 // CLIENT STATS
@@ -687,7 +781,8 @@ function renderClientStats(clientId){
   + '<div style="height:100%;width:' + pct + '%;background:' + pctColor + ';border-radius:20px;transition:width 0.3s"></div></div>'
   + '<div class="grid4" style="gap:8px">'
   + phaseProgress.map(p => '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px;border:0.5px solid var(--border)"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">'+p.name+'</div><div style="font-size:14px;font-weight:500;color:'+(p.pct===100?'var(--green)':p.pct>0?'var(--amber)':'var(--text3)')+'">'+p.done+'/'+p.total+'</div><div style="background:var(--surface3);border-radius:10px;height:4px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+p.pct+'%;background:'+(p.pct===100?'var(--green)':'var(--amber)')+';border-radius:10px"></div></div></div>').join('')
-  + '</div></div></div>';
+  + '</div></div></div>'
+  + '<div class="card"><div class="card-header"><span class="card-title">Turnaround metrics</span><span style="font-size:11px;color:var(--text3)">days between key milestones</span></div><div class="card-body">' + renderClientMetricsCards(clientId) + '</div></div>';
 }
 
 // CLIENT DETAIL
@@ -736,29 +831,109 @@ const PHASES=[
   {name:'Bulk production',items:[{label:'Fabric & trims ordered — update sent',upload:true},{label:'Bulk production started — update sent',upload:true},{label:'Mid-production photos sent to client',upload:true},{label:'Full payment schedule confirmed',upload:false}]},
   {name:'QC & dispatch',items:[{label:'QC completed — photos sent to client',upload:true},{label:'Final invoice sent (50% balance)',upload:false},{label:'Balance payment confirmed',upload:false},{label:'Order packed & dispatched',upload:true},{label:'Tracking number sent to client',upload:false},{label:'Delivery confirmed with client',upload:false}]}
 ];
-function renderWorkflow(clientId,checks,quotes){const stepFiles=lsGet('stepfiles_'+clientId,{});const sentQuotes=(quotes||[]).filter(q=>q.status==='accepted'||q.status==='pending');return PHASES.map(phase=>'<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">'+phase.items.map(item=>{const k=phase.name+'|'+item.label;const done=!!checks[k];const files=stepFiles[k]||[];const isQuoteStep=item.label==='Quote sent to client';return '<div><div class="check-row"><div class="check-box'+(done?' on':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')" ></div><span class="check-text'+(done?' done':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')"> '+item.label+'</span>'+(isQuoteStep&&sentQuotes.length?'<span style="font-size:11px;color:var(--green);margin-left:6px">'+sentQuotes.length+' quote'+(sentQuotes.length>1?'s':'')+'</span>':'')+(item.upload?'<button class="btn btn-xs btn-ghost" onclick="triggerStepUpload(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\')">📎'+(files.length?' '+files.length:'')+'</button>':'')+'</div>'+(files.length?'<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+f.name+'</span><span class="file-chip-del" onclick="delStepFile(\''+clientId+'\',\''+k.replace(/'/g,"\\'")+'\','+fi+')">✕</span></div>').join('')+'</div>':'')+'</div>';}).join('')+'</div></div>').join('');}
-async function toggleCheck(clientId,key){
-  // 1. Read from local cache (instant)
+function renderWorkflow(clientId,checks,quotes){
+  const stepFiles = lsGet('stepfiles_'+clientId, {});
+  const dates = lsGet('checkdates_'+clientId, {});
+  const sentQuotes = (quotes||[]).filter(q=>q.status==='accepted'||q.status==='pending');
+  return PHASES.map(phase => '<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">' +
+    phase.items.map(item => {
+      const k = phase.name+'|'+item.label;
+      const done = !!checks[k];
+      const dateStr = dates[k] ? fmtDate(dates[k]) : '';
+      const files = stepFiles[k] || [];
+      const isQuoteStep = item.label === 'Quote sent to client';
+      return '<div><div class="check-row"><div class="check-box'+(done?' on':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')"></div>' +
+        '<span class="check-text'+(done?' done':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')"> '+item.label+'</span>' +
+        (dateStr ? '<span class="check-date" style="font-size:11px;color:var(--text3);margin-left:8px;cursor:pointer" onclick="editStepDate(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')" title="Click to edit date">'+dateStr+'</span>' : '<span class="check-date"></span>') +
+        (isQuoteStep && sentQuotes.length ? '<span style="font-size:11px;color:var(--green);margin-left:6px">'+sentQuotes.length+' quote'+(sentQuotes.length>1?'s':'')+'</span>' : '') +
+        (item.upload ? '<button class="btn btn-xs btn-ghost" onclick="triggerStepUpload(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')">📎'+(files.length?' '+files.length:'')+'</button>' : '') +
+        '</div>' +
+        (files.length ? '<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+f.name+'</span><span class="file-chip-del" onclick="delStepFile(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\','+fi+')">✕</span></div>').join('')+'</div>' : '') +
+        '</div>';
+    }).join('') + '</div></div>').join('');
+}
+
+// Edit step date
+async function editStepDate(clientId, key) {
+  const dates = lsGet('checkdates_'+clientId, {});
+  const currentDate = dates[key] || today();
+  document.getElementById('date-prompt-step').textContent = key.split('|')[1] || key;
+  document.getElementById('date-prompt-input').value = currentDate;
+  const newDate = await new Promise(resolve => {
+    _datePromptResolve = resolve;
+    document.getElementById('date-prompt-modal').classList.add('open');
+  });
+  if (newDate === null) return;
+  dates[key] = newDate;
+  lsSet('checkdates_'+clientId, dates);
+  if (driveConnected) {
+    driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
+  }
+  await renderClientDetail(clientId);
+  const wfTab = document.querySelector('#client-content [onclick*="ct-workflow"]');
+  if (wfTab) switchTab(wfTab, 'ct-workflow');
+}
+async function toggleCheck(clientId, key) {
   const checks = lsGet('checks_'+clientId, {});
-  checks[key] = !checks[key];
-  // 2. Save to local instantly
+  const dates = lsGet('checkdates_'+clientId, {});
+  const wasChecked = !!checks[key];
+  if (!wasChecked) {
+    // Ticking ON - prompt for date
+    const dateStr = await promptForDate(key);
+    if (dateStr === null) return; // User cancelled
+    checks[key] = true;
+    dates[key] = dateStr;
+  } else {
+    // Unticking - just remove
+    checks[key] = false;
+    delete dates[key];
+  }
   lsSet('checks_'+clientId, checks);
-  // 3. Find active tab BEFORE re-render
-  const activeTab = document.querySelector('#client-content .tab.active');
-  const activeTabOnclick = activeTab ? activeTab.getAttribute('onclick') : null;
-  // 4. Update just the checkbox visually first (instant feedback)
+  lsSet('checkdates_'+clientId, dates);
+  // Visual update
   const checkboxes = document.querySelectorAll('.check-box');
   checkboxes.forEach(cb => {
     const onclick = cb.getAttribute('onclick') || '';
     if (onclick.includes(key.replace(/'/g, "\\'"))) {
       cb.classList.toggle('on', checks[key]);
-      const text = cb.parentElement.querySelector('.check-text');
+      const row = cb.closest('div').parentElement;
+      const text = row?.querySelector('.check-text');
       if (text) text.classList.toggle('done', checks[key]);
+      // Update inline date display
+      const dateEl = row?.querySelector('.check-date');
+      if (dateEl) dateEl.textContent = dates[key] ? fmtDate(dates[key]) : '';
     }
   });
-  // 5. Save to Drive in background (non-blocking)
+  // Save to Drive in background
   if (driveConnected) {
     driveUploadJSON('checks_'+clientId+'.json', checks).catch(() => queueForSync('checks_'+clientId+'.json'));
+    driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
+  }
+  // Re-render to update step dates and stats
+  setTimeout(() => renderClientDetail(clientId).then(() => {
+    // Restore workflow tab
+    const wfTab = document.querySelector('#client-content [onclick*="ct-workflow"]');
+    if (wfTab) switchTab(wfTab, 'ct-workflow');
+  }), 100);
+}
+
+// Promise-based date prompt modal
+let _datePromptResolve = null;
+function promptForDate(stepLabel) {
+  return new Promise(resolve => {
+    _datePromptResolve = resolve;
+    document.getElementById('date-prompt-step').textContent = stepLabel.split('|')[1] || stepLabel;
+    document.getElementById('date-prompt-input').value = today();
+    document.getElementById('date-prompt-modal').classList.add('open');
+    setTimeout(() => document.getElementById('date-prompt-input').focus(), 50);
+  });
+}
+function resolveDatePrompt(useDate) {
+  document.getElementById('date-prompt-modal').classList.remove('open');
+  if (_datePromptResolve) {
+    const val = useDate ? document.getElementById('date-prompt-input').value : null;
+    _datePromptResolve(val);
+    _datePromptResolve = null;
   }
 }
 let activeStepClient=null,activeStepKey=null;
@@ -1445,6 +1620,143 @@ function filterClientsByStatus(arr, filter) {
   return arr;
 }
 
+
+// ════════════════════════════════════════════════════════
+// PRODUCTION METRICS
+// ════════════════════════════════════════════════════════
+
+// Key milestone steps for metrics calculation
+const METRIC_STEPS = {
+  techpack: 'Onboarding|Tech pack received',
+  depositPaid: 'Onboarding|Deposit payment confirmed',
+  factoryBriefed: 'Sampling|Factory briefed on sample',
+  sampleReady: 'Sampling|Sample ready — photos sent to client',
+  sampleApproved: 'Sampling|Sample approved by client',
+  bulkStarted: 'Bulk production|Bulk production started — update sent',
+  qcDone: 'QC & dispatch|QC completed — photos sent to client',
+  dispatched: 'QC & dispatch|Order packed & dispatched',
+  delivered: 'QC & dispatch|Delivery confirmed with client'
+};
+
+// Benchmark targets (in days) for colour coding
+const BENCHMARKS = {
+  techpackToSample: { fast: 14, slow: 28, label: 'Tech pack → Sample ready' },
+  sampleTurnaround: { fast: 10, slow: 21, label: 'Factory briefed → Sample ready' },
+  sampleToApproval: { fast: 5, slow: 14, label: 'Sample ready → Approved' },
+  approvalToBulk: { fast: 7, slow: 14, label: 'Sample approved → Bulk started' },
+  bulkProduction: { fast: 30, slow: 60, label: 'Bulk started → QC done' },
+  qcToDispatch: { fast: 5, slow: 14, label: 'QC → Dispatched' },
+  totalOnboardToDispatch: { fast: 60, slow: 100, label: 'Tech pack → Dispatched' },
+  techpackToDelivery: { fast: 75, slow: 120, label: 'Tech pack → Delivered' }
+};
+
+function getStepDate(clientId, key) {
+  const dates = lsGet('checkdates_'+clientId, {});
+  return dates[key] || null;
+}
+
+function daysBetween(d1, d2) {
+  if (!d1 || !d2) return null;
+  const a = new Date(d1), b = new Date(d2);
+  return Math.round((b - a) / 86400000);
+}
+
+function calcClientMetrics(clientId) {
+  const get = key => getStepDate(clientId, METRIC_STEPS[key]);
+  return {
+    techpackToSample: daysBetween(get('techpack'), get('sampleReady')),
+    sampleTurnaround: daysBetween(get('factoryBriefed'), get('sampleReady')),
+    sampleToApproval: daysBetween(get('sampleReady'), get('sampleApproved')),
+    approvalToBulk: daysBetween(get('sampleApproved'), get('bulkStarted')),
+    bulkProduction: daysBetween(get('bulkStarted'), get('qcDone')),
+    qcToDispatch: daysBetween(get('qcDone'), get('dispatched')),
+    totalOnboardToDispatch: daysBetween(get('techpack'), get('dispatched')),
+    techpackToDelivery: daysBetween(get('techpack'), get('delivered'))
+  };
+}
+
+function colorForMetric(metricKey, days) {
+  if (days == null) return 'var(--text3)';
+  const b = BENCHMARKS[metricKey];
+  if (!b) return 'var(--text)';
+  if (days <= b.fast) return 'var(--green)';
+  if (days >= b.slow) return 'var(--red)';
+  return 'var(--amber)';
+}
+
+
+function renderClientMetricsCards(clientId) {
+  const m = calcClientMetrics(clientId);
+  const cards = Object.keys(BENCHMARKS).map(k => {
+    const days = m[k];
+    const b = BENCHMARKS[k];
+    const color = colorForMetric(k, days);
+    const valDisplay = days != null ? days + ' days' : '—';
+    return '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;border:0.5px solid var(--border)">' +
+      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + b.label + '</div>' +
+      '<div style="font-size:18px;font-weight:500;color:'+color+';margin-bottom:4px">' + valDisplay + '</div>' +
+      '<div style="font-size:10px;color:var(--text3)">benchmark: ≤' + b.fast + 'd fast · ≥' + b.slow + 'd slow</div>' +
+      '</div>';
+  }).join('');
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' + cards + '</div>';
+}
+
+function calcOverallMetrics(periodDays) {
+  // Filter to active clients with data in the period (or all-time if periodDays is null/0)
+  const cutoff = periodDays ? Date.now() - periodDays * 86400000 : 0;
+  const activeClients = clients.filter(c => c.status === 'active' || c.status === 'sample' || c.status === 'done');
+  
+  const aggregates = {};
+  Object.keys(BENCHMARKS).forEach(k => aggregates[k] = []);
+  
+  activeClients.forEach(c => {
+    const m = calcClientMetrics(c.id);
+    const techpackDate = getStepDate(c.id, METRIC_STEPS.techpack);
+    if (cutoff && techpackDate && new Date(techpackDate).getTime() < cutoff) return;
+    Object.keys(m).forEach(k => {
+      if (m[k] != null && m[k] >= 0) aggregates[k].push(m[k]);
+    });
+  });
+  
+  const averages = {};
+  Object.keys(aggregates).forEach(k => {
+    const arr = aggregates[k];
+    averages[k] = arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
+    averages[k + '_count'] = arr.length;
+  });
+  return averages;
+}
+
+
+function refreshDashboardMetrics() {
+  const period = parseInt(document.getElementById('metrics-period').value) || 0;
+  const el = document.getElementById('metrics-content');
+  if (el) el.innerHTML = renderOverallMetrics(period);
+}
+
+function renderOverallMetrics(periodDays) {
+  const m = calcOverallMetrics(periodDays);
+  const cards = Object.keys(BENCHMARKS).map(k => {
+    const days = m[k];
+    const count = m[k + '_count'];
+    const b = BENCHMARKS[k];
+    const color = colorForMetric(k, days);
+    const valDisplay = days != null ? days + 'd' : '—';
+    return '<div class="stat" style="text-align:left;padding:14px">' +
+      '<div class="stat-label" style="margin-bottom:6px">' + b.label + '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">' +
+      '<div style="font-size:24px;font-weight:500;color:'+color+'">' + valDisplay + '</div>' +
+      (count ? '<div style="font-size:10px;color:var(--text3)">avg from ' + count + '</div>' : '') +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text3);display:flex;justify-content:space-between"><span style="color:var(--green)">≤'+b.fast+'d fast</span><span style="color:var(--red)">≥'+b.slow+'d slow</span></div>' +
+      '<div style="background:var(--surface3);border-radius:10px;height:3px;margin-top:4px;position:relative;overflow:hidden">' +
+      (days != null ? '<div style="position:absolute;left:'+Math.min(100, Math.max(0, (days/b.slow)*100))+'%;top:-2px;width:2px;height:7px;background:'+color+'"></div>' : '') +
+      '</div>' +
+      '</div>';
+  }).join('');
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">' + cards + '</div>';
+}
+
 // WORKFLOW REPORT
 function generateWorkflowReport() {
   const statusFilter = document.getElementById('wr-status').value;
@@ -1644,7 +1956,7 @@ function resolveConfirm(answer) {
 function switchReportTab(btn, tabId) {
   document.querySelectorAll('#panel-reports .tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  ['rep-financial','rep-taxes'].forEach(id => {
+  ['rep-financial','rep-taxes','rep-metrics'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = id === tabId ? 'block' : 'none';
   });
@@ -1800,6 +2112,127 @@ function exportTaxReport(format) {
   w.document.write(html);
   w.document.close();
   showToast('Tax report opened — Print or Save as PDF ✓');
+}
+
+
+// METRICS REPORT
+function generateMetricsReport() {
+  const period = parseNum(document.getElementById('metrics-rep-period').value, 0);
+  const sf = document.getElementById('metrics-rep-status').value;
+  let filteredClients = clients;
+  if (sf === 'active') filteredClients = filteredClients.filter(c => c.status === 'active' || c.status === 'sample');
+  else if (sf === 'done') filteredClients = filteredClients.filter(c => c.status === 'done');
+  
+  const cutoff = period ? Date.now() - period * 86400000 : 0;
+  const rows = [];
+  filteredClients.forEach(c => {
+    const m = calcClientMetrics(c.id);
+    const techpackDate = getStepDate(c.id, METRIC_STEPS.techpack);
+    if (cutoff && techpackDate && new Date(techpackDate).getTime() < cutoff) return;
+    // Only include clients with at least one metric available
+    if (Object.values(m).some(v => v != null)) {
+      rows.push({ client: c, metrics: m, techpackDate });
+    }
+  });
+  
+  const el = document.getElementById('metrics-rep-output');
+  if (!rows.length) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters. Make sure workflow steps have dates recorded.</div>';
+    return;
+  }
+  
+  // Calculate overall averages from this filtered set
+  const aggregates = {};
+  Object.keys(BENCHMARKS).forEach(k => aggregates[k] = []);
+  rows.forEach(r => {
+    Object.keys(r.metrics).forEach(k => {
+      if (r.metrics[k] != null && r.metrics[k] >= 0) aggregates[k].push(r.metrics[k]);
+    });
+  });
+  const avgs = {};
+  Object.keys(aggregates).forEach(k => {
+    const arr = aggregates[k];
+    avgs[k] = arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  });
+  
+  let html = '<div class="card"><div class="card-header"><span class="card-title">Overall averages</span><span style="font-size:11px;color:var(--text3)">' + rows.length + ' client' + (rows.length>1?'s':'') + '</span></div><div class="card-body">';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">';
+  Object.keys(BENCHMARKS).forEach(k => {
+    const days = avgs[k];
+    const b = BENCHMARKS[k];
+    const color = colorForMetric(k, days);
+    html += '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;border:0.5px solid var(--border)">' +
+      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + b.label + '</div>' +
+      '<div style="font-size:20px;font-weight:500;color:'+color+';margin-bottom:4px">' + (days != null ? days + ' days' : '—') + '</div>' +
+      '<div style="font-size:10px;color:var(--text3)">benchmark: ≤' + b.fast + 'd / ≥' + b.slow + 'd</div>' +
+      '</div>';
+  });
+  html += '</div></div></div>';
+  
+  html += '<div class="card"><div class="card-header"><span class="card-title">Per client</span></div><div style="overflow:auto"><table class="report-tbl">';
+  html += '<thead><tr><th>Client</th>';
+  Object.keys(BENCHMARKS).forEach(k => { html += '<th style="text-align:right" title="' + BENCHMARKS[k].label + '">' + BENCHMARKS[k].label.split('→').map(p=>p.trim().slice(0,4)).join('→') + '</th>'; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr><td style="font-weight:500;cursor:pointer;color:var(--accent)" onclick="showPanel(\'client\',\''+r.client.id+'\')">' + r.client.brand + '</td>';
+    Object.keys(BENCHMARKS).forEach(k => {
+      const d = r.metrics[k];
+      const color = colorForMetric(k, d);
+      html += '<td style="text-align:right;color:'+color+'">' + (d != null ? d + 'd' : '—') + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function exportMetricsReport() {
+  const period = parseNum(document.getElementById('metrics-rep-period').value, 0);
+  const sf = document.getElementById('metrics-rep-status').value;
+  let filteredClients = clients;
+  if (sf === 'active') filteredClients = filteredClients.filter(c => c.status === 'active' || c.status === 'sample');
+  else if (sf === 'done') filteredClients = filteredClients.filter(c => c.status === 'done');
+  
+  const cutoff = period ? Date.now() - period * 86400000 : 0;
+  const rows = [];
+  filteredClients.forEach(c => {
+    const m = calcClientMetrics(c.id);
+    const techpackDate = getStepDate(c.id, METRIC_STEPS.techpack);
+    if (cutoff && techpackDate && new Date(techpackDate).getTime() < cutoff) return;
+    if (Object.values(m).some(v => v != null)) rows.push({ client: c, metrics: m });
+  });
+  if (!rows.length) { showToast('No data to export'); return; }
+  
+  const periodLabel = period === 0 ? 'All time' : 'Last ' + period + ' days';
+  let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Turnaround Report</title>';
+  html += '<style>body{font-family:sans-serif;padding:32px;color:#111;max-width:1000px;margin:0 auto}h1{font-family:serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:24px}table{width:100%;border-collapse:collapse;font-size:11px;margin-top:16px}th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:10px;color:#999;text-transform:uppercase}td{padding:8px 6px;border-bottom:1px solid #eee}.green{color:#2d7a4a}.amber{color:#b07020}.red{color:#b03030}.gray{color:#888}</style></head><body>';
+  html += '<h1>The Apparel Co — Turnaround Report</h1><p>Period: ' + periodLabel + ' · ' + rows.length + ' client' + (rows.length>1?'s':'') + '</p>';
+  html += '<table><thead><tr><th>Client</th>';
+  Object.keys(BENCHMARKS).forEach(k => { html += '<th style="text-align:right">' + BENCHMARKS[k].label + '</th>'; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr><td><strong>' + r.client.brand + '</strong></td>';
+    Object.keys(BENCHMARKS).forEach(k => {
+      const d = r.metrics[k];
+      const b = BENCHMARKS[k];
+      let cls = 'gray';
+      if (d != null) {
+        if (d <= b.fast) cls = 'green';
+        else if (d >= b.slow) cls = 'red';
+        else cls = 'amber';
+      }
+      html += '<td style="text-align:right" class="' + cls + '">' + (d != null ? d + 'd' : '—') + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+  
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'TheApparelCo_Turnaround_' + today() + '.html'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Report exported — open and Print → Save as PDF ✓');
 }
 
 // KEYBOARD & START
