@@ -548,12 +548,46 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
             <div class="field"><label>Website</label><input id="co-website" placeholder="theapparelco.co" oninput="saveCompanyInfo()"></div>
             <div class="field"><label>Phone / WhatsApp</label><input id="co-phone" placeholder="+351..." oninput="saveCompanyInfo()"></div>
           </div>
-          <div class="field"><label>Address</label><textarea id="co-address" placeholder="Street, city, postcode, country" style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
+          <div class="field"><label>Company address</label><textarea id="co-address" placeholder="Street, city, postcode, country" style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Tax identifiers</span><span style="font-size:11px;color:var(--text3)">For international invoicing</span></div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">Include either or both — your EIN if you are a US company, and a VAT number if you are EU-registered. Both can appear on invoices for client accounts payable systems.</div>
           <div class="grid2">
-            <div class="field"><label>VAT number</label><input id="co-vat" placeholder="PT123456789" oninput="saveCompanyInfo()"></div>
-            <div class="field"><label>Bank / IBAN</label><input id="co-iban" placeholder="PT50..." oninput="saveCompanyInfo()"></div>
+            <div class="field"><label>EIN (US Federal Tax ID)</label><input id="co-ein" placeholder="XX-XXXXXXX" oninput="saveCompanyInfo()"></div>
+            <div class="field"><label>VAT number (EU)</label><input id="co-vat" placeholder="PT123456789" oninput="saveCompanyInfo()"></div>
           </div>
-          <div class="field"><label>Invoice footer note</label><textarea id="co-footer" placeholder="Payment terms, bank details, thank you message..." style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
+          <div class="field"><label>Other tax / business registration (optional)</label><input id="co-tax-other" placeholder="State registration, LLC number, etc." oninput="saveCompanyInfo()"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Banking details</span><span style="font-size:11px;color:var(--text3)">For receiving wire payments</span></div>
+        <div class="card-body">
+          <div class="grid2">
+            <div class="field"><label>Account holder name</label><input id="co-bank-holder" placeholder="Name on the account" oninput="saveCompanyInfo()"></div>
+            <div class="field"><label>Bank name</label><input id="co-bank-name" placeholder="e.g. Wells Fargo, Banco Santander" oninput="saveCompanyInfo()"></div>
+          </div>
+          <div class="field"><label>Bank address</label><textarea id="co-bank-address" placeholder="Branch address" style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
+          <div class="grid2">
+            <div class="field"><label>Account number</label><input id="co-bank-account" placeholder="Account number" oninput="saveCompanyInfo()"></div>
+            <div class="field"><label>Routing / ABA number (US)</label><input id="co-bank-routing" placeholder="9-digit routing number" oninput="saveCompanyInfo()"></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>IBAN (Europe)</label><input id="co-iban" placeholder="PT50..." oninput="saveCompanyInfo()"></div>
+            <div class="field"><label>SWIFT / BIC code</label><input id="co-swift" placeholder="ABCDUS33XXX" oninput="saveCompanyInfo()"></div>
+          </div>
+          <div class="field"><label>Wire instructions / extra notes</label><textarea id="co-wire-notes" placeholder="Reference notes, intermediary bank info, etc." style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Invoice footer note</span></div>
+        <div class="card-body">
+          <div class="field"><label>Custom footer text</label><textarea id="co-footer" placeholder="Thank you message, payment terms, additional info..." style="min-height:55px" oninput="saveCompanyInfo()"></textarea></div>
         </div>
       </div>
       <div class="card">
@@ -1365,57 +1399,103 @@ function loadLogo() {
 
 // SETTINGS — COMPANY INFO
 function saveCompanyInfo() {
+  const get = id => document.getElementById(id)?.value || '';
   const info = {
-    name: document.getElementById('co-name')?.value || '',
-    email: document.getElementById('co-email')?.value || '',
-    website: document.getElementById('co-website')?.value || '',
-    phone: document.getElementById('co-phone')?.value || '',
-    address: document.getElementById('co-address')?.value || '',
-    vat: document.getElementById('co-vat')?.value || '',
-    iban: document.getElementById('co-iban')?.value || '',
-    footer: document.getElementById('co-footer')?.value || '',
-    invPrefix: document.getElementById('co-inv-prefix')?.value || 'TAC',
-    invDue: document.getElementById('co-inv-due')?.value || '14',
-    invIva: document.getElementById('co-inv-iva')?.value || '23',
-    invFx: document.getElementById('co-inv-fx')?.value || '2',
-    invShip: document.getElementById('co-inv-ship')?.value || '200',
-    invTerms: document.getElementById('co-inv-terms')?.value || '50% deposit · 50% before dispatch'
+    name: get('co-name'),
+    email: get('co-email'),
+    website: get('co-website'),
+    phone: get('co-phone'),
+    address: get('co-address'),
+    // Tax IDs
+    ein: get('co-ein'),
+    vat: get('co-vat'),
+    taxOther: get('co-tax-other'),
+    // Banking
+    bankHolder: get('co-bank-holder'),
+    bankName: get('co-bank-name'),
+    bankAddress: get('co-bank-address'),
+    bankAccount: get('co-bank-account'),
+    bankRouting: get('co-bank-routing'),
+    iban: get('co-iban'),
+    swift: get('co-swift'),
+    wireNotes: get('co-wire-notes'),
+    // Invoice footer
+    footer: get('co-footer'),
+    // Invoice defaults
+    invPrefix: get('co-inv-prefix') || 'TAC',
+    invDue: get('co-inv-due') || '14',
+    invIva: get('co-inv-iva') || '23',
+    invFx: get('co-inv-fx') || '2',
+    invShip: get('co-inv-ship') || '200',
+    invTerms: get('co-inv-terms') || '50% deposit · 50% before dispatch'
   };
   lsSet('tac_company', info);
 }
 function loadCompanyInfo() {
   const info = lsGet('tac_company', {});
   setLogoSize(getLogoSize());
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   if (document.getElementById('co-name')) {
-    document.getElementById('co-name').value = info.name || '';
-    document.getElementById('co-email').value = info.email || '';
-    document.getElementById('co-website').value = info.website || '';
-    document.getElementById('co-phone').value = info.phone || '';
-    document.getElementById('co-address').value = info.address || '';
-    document.getElementById('co-vat').value = info.vat || '';
-    document.getElementById('co-iban').value = info.iban || '';
-    document.getElementById('co-footer').value = info.footer || '';
-    if(document.getElementById('co-inv-prefix')){
-      document.getElementById('co-inv-prefix').value = info.invPrefix || 'TAC';
-      document.getElementById('co-inv-due').value = info.invDue || '14';
-      document.getElementById('co-inv-iva').value = info.invIva || '23';
-      document.getElementById('co-inv-fx').value = info.invFx || '2';
-      document.getElementById('co-inv-ship').value = info.invShip || '200';
-      document.getElementById('co-inv-terms').value = info.invTerms || '50% deposit · 50% before dispatch';
+    set('co-name', info.name);
+    set('co-email', info.email);
+    set('co-website', info.website);
+    set('co-phone', info.phone);
+    set('co-address', info.address);
+    // Tax IDs
+    set('co-ein', info.ein);
+    set('co-vat', info.vat);
+    set('co-tax-other', info.taxOther);
+    // Banking
+    set('co-bank-holder', info.bankHolder);
+    set('co-bank-name', info.bankName);
+    set('co-bank-address', info.bankAddress);
+    set('co-bank-account', info.bankAccount);
+    set('co-bank-routing', info.bankRouting);
+    set('co-iban', info.iban);
+    set('co-swift', info.swift);
+    set('co-wire-notes', info.wireNotes);
+    // Footer
+    set('co-footer', info.footer);
+    // Invoice defaults
+    if (document.getElementById('co-inv-prefix')) {
+      set('co-inv-prefix', info.invPrefix || 'TAC');
+      set('co-inv-due', info.invDue || '14');
+      set('co-inv-iva', info.invIva || '23');
+      set('co-inv-fx', info.invFx || '2');
+      set('co-inv-ship', info.invShip || '200');
+      set('co-inv-terms', info.invTerms || '50% deposit · 50% before dispatch');
     }
   }
 }
 function getCompanyInfo() {
   const info = lsGet('tac_company', {});
   return {
-    name: info.name || 'The Apparel Co',
-    email: info.email || 'info@theapparelco.co',
-    website: info.website || 'theapparelco.co',
-    phone: info.phone || '',
-    address: info.address || 'Porto, Portugal',
-    vat: info.vat || '',
-    iban: info.iban || '',
-    footer: info.footer || 'Thank you for working with The Apparel Co.'
+    name:        info.name        || 'The Apparel Co',
+    email:       info.email       || 'info@theapparelco.co',
+    website:     info.website     || 'theapparelco.co',
+    phone:       info.phone       || '',
+    address:     info.address     || 'Porto, Portugal',
+    // Tax IDs
+    ein:         info.ein         || '',
+    vat:         info.vat         || '',
+    taxOther:    info.taxOther    || '',
+    // Banking
+    bankHolder:  info.bankHolder  || '',
+    bankName:    info.bankName    || '',
+    bankAddress: info.bankAddress || '',
+    bankAccount: info.bankAccount || '',
+    bankRouting: info.bankRouting || '',
+    iban:        info.iban        || '',
+    swift:       info.swift       || '',
+    wireNotes:   info.wireNotes   || '',
+    // Footer + invoice defaults
+    footer:      info.footer      || 'Thank you for working with The Apparel Co.',
+    invPrefix:   info.invPrefix   || 'TAC',
+    invDue:      info.invDue      || '14',
+    invIva:      info.invIva      || '23',
+    invFx:       info.invFx       || '2',
+    invShip:     info.invShip     || '200',
+    invTerms:    info.invTerms    || '50% deposit · 50% before dispatch'
   };
 }
 function getLogoSize() {
@@ -1443,7 +1523,28 @@ function getLogoHtml(forDarkBg) {
 function getCompanyAddressHtml() {
   const co = getCompanyInfo();
   const lines = [co.email, co.website, co.address, co.phone].filter(Boolean);
+  // Add tax IDs on a separate line for clarity
+  const taxIds = [];
+  if (co.ein) taxIds.push('EIN: ' + co.ein);
+  if (co.vat) taxIds.push('VAT: ' + co.vat);
+  if (co.taxOther) taxIds.push(co.taxOther);
+  if (taxIds.length) lines.push(taxIds.join(' · '));
   return '<div class="inv-address">' + lines.join('<br>') + '</div>';
+}
+
+function getBankingHtml() {
+  const co = getCompanyInfo();
+  const lines = [];
+  if (co.bankHolder) lines.push('<strong>Pay to:</strong> ' + co.bankHolder);
+  if (co.bankName) lines.push('<strong>Bank:</strong> ' + co.bankName);
+  if (co.bankAddress) lines.push(co.bankAddress.split('\n').join(', '));
+  if (co.bankAccount) lines.push('<strong>Account:</strong> ' + co.bankAccount);
+  if (co.bankRouting) lines.push('<strong>Routing/ABA:</strong> ' + co.bankRouting);
+  if (co.iban) lines.push('<strong>IBAN:</strong> ' + co.iban);
+  if (co.swift) lines.push('<strong>SWIFT/BIC:</strong> ' + co.swift);
+  if (co.wireNotes) lines.push(co.wireNotes);
+  if (!lines.length) return '';
+  return '<div style="margin-top:14px;padding:12px;background:#f7f4ef;border-radius:6px;border-left:3px solid #c4a572;font-size:11px;line-height:1.7"><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;font-weight:500">Payment / Banking details</div>' + lines.join('<br>') + '</div>';
 }
 
 
@@ -1578,7 +1679,7 @@ function renderInvoiceDoc(clientId, idx) {
     (totalPaid>0?'<div class="inv-total-line" style="color:#4a7"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div>':'') +
     (outstanding>0?'<div class="inv-total-line"><span>Outstanding</span><span>'+s+outstanding.toFixed(2)+'</span></div>':'') +
     '</div>' +
-    '<div class="inv-footer">Payment terms: '+co.invTerms+'<br>'+co.footer+(co.iban?'<br>Bank/IBAN: '+co.iban:'')+'</div>';
+    getBankingHtml() + '<div class="inv-footer">Payment terms: '+co.invTerms+'<br>'+co.footer+'</div>';
 
   return buildDocHtml('Invoice ' + inv.number, inner);
 }
@@ -1871,7 +1972,7 @@ function renderCurrentInvoiceDoc() {
     '<div class="inv-total-line"><span>50% deposit</span><span>'+s+((d.grand||0)/2).toFixed(2)+'</span></div>' +
     '<div class="inv-total-line"><span>50% before dispatch</span><span>'+s+((d.grand||0)/2).toFixed(2)+'</span></div>' +
     '</div>' +
-    '<div class="inv-footer">Payment terms: '+terms+'<br>'+co.footer+(co.iban?'<br>Bank/IBAN: '+co.iban:'')+'</div>';
+    getBankingHtml() + '<div class="inv-footer">Payment terms: '+terms+'<br>'+co.footer+'</div>';
 
   return { html: buildDocHtml('Invoice ' + num, inner), num };
 }
