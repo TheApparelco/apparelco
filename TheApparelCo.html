@@ -583,6 +583,19 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
       </div>
       <div class="card">
+        <div class="card-header"><span class="card-title">Data & backup</span></div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">All your data is automatically saved to Google Drive in real-time. You can also download a manual backup file to your computer as an extra safety net.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <button class="btn btn-primary btn-sm" onclick="downloadBackup()">⬇ Download backup now</button>
+            <button class="btn btn-sm" onclick="manualSync()">⟳ Force sync with Drive</button>
+          </div>
+          <hr style="border:none;border-top:0.5px solid var(--border);margin:14px 0">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6"><strong style="color:var(--amber)">⚠️ Restore from backup</strong> — Upload a previously downloaded backup JSON file to restore all your data. This will replace everything currently in the app.</div>
+          <button class="btn btn-sm btn-danger" onclick="triggerRestore()" style="border-color:var(--amber);color:var(--amber)">⤴ Restore from backup file</button>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header"><span class="card-title">Appearance</span></div>
         <div class="card-body">
           <label style="margin-bottom:10px;display:block">Theme</label>
@@ -691,6 +704,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="slideshow-caption" id="slideshow-caption"></div>
 </div>
 <div class="toast" id="toast"></div>
+<input type="file" id="restore-file-input" accept=".json,application/json" style="display:none" onchange="handleRestoreFile(event)">
 <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
 <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFiles(event)">
 <input type="file" id="doc-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ai,.eps,.png,.jpg,.jpeg,.zip" multiple style="display:none" onchange="handleDocFiles(event)">
@@ -2581,6 +2595,86 @@ function renderClientsPanel() {
   el.innerHTML = filtered.map(c => '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'client\',\''+ c.id +'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+([c.contact,c.country].filter(Boolean).join(' · ')||'—')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('');
 }
 
+
+
+// RESTORE FROM BACKUP
+async function restoreFromBackup(file) {
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.version || !data.clients) {
+        showToast('Invalid backup file format');
+        return;
+      }
+      const ok = await themedConfirm(
+        'Restore backup?',
+        'This will REPLACE all current clients, quotes, invoices, workflow data and files with the backup from ' + (data.exported ? new Date(data.exported).toLocaleDateString() : 'unknown date') + '. This cannot be undone.',
+        'Yes, restore',
+        '⚠️'
+      );
+      if (!ok) return;
+      
+      // Replace clients
+      clients = data.clients || [];
+      lsSet('tac_clients', clients);
+      
+      // Replace checks, dates, quotes, invoices
+      Object.keys(data.checks || {}).forEach(cid => {
+        lsSet('checks_' + cid, data.checks[cid]);
+      });
+      Object.keys(data.checkdates || {}).forEach(cid => {
+        lsSet('checkdates_' + cid, data.checkdates[cid]);
+      });
+      Object.keys(data.quotes || {}).forEach(cid => {
+        lsSet('quotes_' + cid, data.quotes[cid]);
+      });
+      Object.keys(data.invoices || {}).forEach(cid => {
+        lsSet('invoices_' + cid, data.invoices[cid]);
+      });
+      
+      // Sync to Drive if connected
+      if (driveConnected) {
+        setSyncStatus('syncing');
+        try {
+          for (const c of clients) {
+            await driveUploadJSON('client_' + c.id + '.json', c);
+          }
+          for (const cid of Object.keys(data.checks || {})) {
+            await driveUploadJSON('checks_' + cid + '.json', data.checks[cid]);
+          }
+          for (const cid of Object.keys(data.checkdates || {})) {
+            await driveUploadJSON('checkdates_' + cid + '.json', data.checkdates[cid]);
+          }
+          await saveManifest();
+          setSyncStatus('synced');
+        } catch (err) {
+          console.warn('Drive restore partial:', err);
+          setSyncStatus('offline');
+        }
+      }
+      
+      renderSidebarClients();
+      renderDashboard();
+      populatePriceClients();
+      showToast('Backup restored ✓ — ' + clients.length + ' client' + (clients.length !== 1 ? 's' : '') + ' loaded');
+    } catch (err) {
+      showToast('Failed to read backup: ' + err.message);
+      console.error('Restore error:', err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function triggerRestore() {
+  document.getElementById('restore-file-input').click();
+}
+
+function handleRestoreFile(e) {
+  const file = e.target.files[0];
+  if (file) restoreFromBackup(file);
+  e.target.value = '';
+}
 
 // KEYBOARD & START
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSlideshow();closeModal('client-modal');closeModal('quote-modal');closeModal('payment-modal');}if(document.getElementById('slideshow').classList.contains('open')){if(e.key==='ArrowLeft')slidePrev();if(e.key==='ArrowRight')slideNext();}});
