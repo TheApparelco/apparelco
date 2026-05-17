@@ -854,7 +854,39 @@ async function manualSync(){if(!driveConnected){showToast('Not connected to Goog
 setInterval(async()=>{if(driveConnected&&lsGet('sync_queue',[]).length>0){try{await flushSyncQueue();setSyncStatus('synced');}catch{}}},60000);
 
 // BACKUP
-function downloadBackup(){const data={exported:new Date().toISOString(),version:'2.0',clients,checks:{},quotes:{},invoices:{}};clients.forEach(c=>{data.checks[c.id]=lsGet('checks_'+c.id,{});data.quotes[c.id]=lsGet('quotes_'+c.id,[]);data.invoices[c.id]=lsGet('invoices_'+c.id,[]);});const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Backup_'+new Date().toISOString().split('T')[0]+'.json';a.click();URL.revokeObjectURL(url);localStorage.setItem('last_backup_date',new Date().toDateString());showToast('Backup downloaded ✓');}
+function downloadBackup(){
+  const data = {
+    exported: new Date().toISOString(),
+    version: '2.1',
+    clients,
+    checks: {},
+    checkdates: {},
+    quotes: {},
+    invoices: {},
+    stepfiles: {},
+    company: lsGet('tac_company', {}),
+    benchmarks: lsGet('tac_benchmarks', null),
+    logo: lsGet('tac_logo', null),
+    logoSize: lsGet('tac_logo_size', 'm'),
+    theme: lsGet('tac_theme', 'light')
+  };
+  clients.forEach(c => {
+    data.checks[c.id]      = lsGet('checks_'+c.id, {});
+    data.checkdates[c.id]  = lsGet('checkdates_'+c.id, {});
+    data.quotes[c.id]      = lsGet('quotes_'+c.id, []);
+    data.invoices[c.id]    = lsGet('invoices_'+c.id, []);
+    data.stepfiles[c.id]   = lsGet('stepfiles_'+c.id, {});
+  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'TheApparelCo_Backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  localStorage.setItem('last_backup_date', new Date().toDateString());
+  showToast('Backup downloaded ✓');
+}
 function checkDailyBackup(){const last=localStorage.getItem('last_backup_date');if(last!==new Date().toDateString()&&clients.length>0){setTimeout(()=>showToast('Daily backup ready — click ⬇ Backup',6000),5000);}}
 
 // INIT
@@ -1062,22 +1094,55 @@ function renderWorkflow(clientId,checks,quotes){
   const stepFiles = lsGet('stepfiles_'+clientId, {});
   const dates = lsGet('checkdates_'+clientId, {});
   const sentQuotes = (quotes||[]).filter(q=>q.status==='accepted'||q.status==='pending');
-  return PHASES.map(phase => '<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">' +
-    phase.items.map(item => {
+  // Use HTML-escape function for safety
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return PHASES.map((phase, pi) => '<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">' +
+    phase.items.map((item, ii) => {
       const k = phase.name+'|'+item.label;
       const done = !!checks[k];
       const dateStr = dates[k] ? fmtDate(dates[k]) : '';
       const files = stepFiles[k] || [];
       const isQuoteStep = item.label === 'Quote sent to client';
-      return '<div><div class="check-row"><div class="check-box'+(done?' on':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')"></div>' +
-        '<span class="check-text'+(done?' done':'')+'" onclick="toggleCheck(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')"> '+item.label+'</span>' +
-        (dateStr ? '<span class="check-date" style="font-size:11px;color:var(--text3);margin-left:8px;cursor:pointer" onclick="editStepDate(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')" title="Click to edit date">'+dateStr+'</span>' : '<span class="check-date"></span>') +
+      // Use data attributes — no string-escaping nightmares
+      return '<div><div class="check-row">' +
+        '<div class="check-box'+(done?' on':'')+'" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" onclick="handleCheckClick(this)"></div>' +
+        '<span class="check-text'+(done?' done':'')+'" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" onclick="handleCheckClick(this)"> '+esc(item.label)+'</span>' +
+        (dateStr ? '<span class="check-date" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" style="font-size:11px;color:var(--text3);margin-left:8px;cursor:pointer" onclick="handleEditDate(this)" title="Click to edit date">'+dateStr+'</span>' : '<span class="check-date"></span>') +
         (isQuoteStep && sentQuotes.length ? '<span style="font-size:11px;color:var(--green);margin-left:6px">'+sentQuotes.length+' quote'+(sentQuotes.length>1?'s':'')+'</span>' : '') +
-        (item.upload ? '<button class="btn btn-xs btn-ghost" onclick="triggerStepUpload(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\')">📎'+(files.length?' '+files.length:'')+'</button>' : '') +
+        (item.upload ? '<button class="btn btn-xs btn-ghost" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" onclick="handleStepUpload(this)">📎'+(files.length?' '+files.length:'')+'</button>' : '') +
         '</div>' +
-        (files.length ? '<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+f.name+'</span><span class="file-chip-del" onclick="delStepFile(\''+clientId+'\',\''+k.replace(/\'/g, "\\'")+'\','+fi+')">✕</span></div>').join('')+'</div>' : '') +
+        (files.length ? '<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+esc(f.name)+'</span><span class="file-chip-del" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" data-fi="'+fi+'" onclick="handleDelStepFile(this)">✕</span></div>').join('')+'</div>' : '') +
         '</div>';
     }).join('') + '</div></div>').join('');
+}
+
+// Click handlers that read data attributes (no string escaping issues)
+function getStepKeyFromEl(el) {
+  const cid = el.dataset.cid;
+  const pi = parseInt(el.dataset.phase);
+  const ii = parseInt(el.dataset.item);
+  const phase = PHASES[pi];
+  if (!phase) return null;
+  const item = phase.items[ii];
+  if (!item) return null;
+  return { cid, key: phase.name + '|' + item.label };
+}
+function handleCheckClick(el) {
+  const info = getStepKeyFromEl(el);
+  if (info) toggleCheck(info.cid, info.key);
+}
+function handleEditDate(el) {
+  const info = getStepKeyFromEl(el);
+  if (info) editStepDate(info.cid, info.key);
+}
+function handleStepUpload(el) {
+  const info = getStepKeyFromEl(el);
+  if (info) triggerStepUpload(info.cid, info.key);
+}
+function handleDelStepFile(el) {
+  const info = getStepKeyFromEl(el);
+  const fi = parseInt(el.dataset.fi);
+  if (info) delStepFile(info.cid, info.key, fi);
 }
 
 // Edit step date
@@ -1102,6 +1167,11 @@ async function editStepDate(clientId, key) {
   const workflowContent = document.getElementById('ct-workflow');
   if (workflowContent) {
     workflowContent.innerHTML = renderWorkflow(clientId, checks, quotes);
+  }
+  // Refresh stats too in case metrics changed
+  const statsContent = document.getElementById('ct-stats');
+  if (statsContent) {
+    statsContent.innerHTML = renderClientStats(clientId);
   }
 }
 async function toggleCheck(clientId, key) {
@@ -1131,11 +1201,16 @@ async function toggleCheck(clientId, key) {
     driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
   }
   
-  // Re-render the workflow tab content in place (fast, no full client detail re-render)
+  // Re-render the workflow tab content in place
   const workflowContent = document.getElementById('ct-workflow');
   if (workflowContent) {
     const quotes = getClientQuotes(clientId);
     workflowContent.innerHTML = renderWorkflow(clientId, checks, quotes);
+  }
+  // Also refresh the stats tab (progress bar) so it stays in sync
+  const statsContent = document.getElementById('ct-stats');
+  if (statsContent) {
+    statsContent.innerHTML = renderClientStats(clientId);
   }
 }
 
@@ -2614,7 +2689,7 @@ async function restoreFromBackup(file) {
       clients = data.clients || [];
       lsSet('tac_clients', clients);
       
-      // Replace checks, dates, quotes, invoices
+      // Replace per-client data
       Object.keys(data.checks || {}).forEach(cid => {
         lsSet('checks_' + cid, data.checks[cid]);
       });
@@ -2627,6 +2702,16 @@ async function restoreFromBackup(file) {
       Object.keys(data.invoices || {}).forEach(cid => {
         lsSet('invoices_' + cid, data.invoices[cid]);
       });
+      Object.keys(data.stepfiles || {}).forEach(cid => {
+        lsSet('stepfiles_' + cid, data.stepfiles[cid]);
+      });
+      
+      // Restore global settings if backup has them
+      if (data.company) lsSet('tac_company', data.company);
+      if (data.benchmarks) lsSet('tac_benchmarks', data.benchmarks);
+      if (data.logo) lsSet('tac_logo', data.logo);
+      if (data.logoSize) lsSet('tac_logo_size', data.logoSize);
+      if (data.theme) lsSet('tac_theme', data.theme);
       
       // Sync to Drive if connected
       if (driveConnected) {
