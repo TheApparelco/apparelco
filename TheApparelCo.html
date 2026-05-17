@@ -1096,14 +1096,19 @@ async function editStepDate(clientId, key) {
   if (driveConnected) {
     driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
   }
-  await renderClientDetail(clientId);
-  const wfTab = document.querySelector('#client-content [onclick*="ct-workflow"]');
-  if (wfTab) switchTab(wfTab, 'ct-workflow');
+  // Re-render workflow tab in place
+  const checks = lsGet('checks_'+clientId, {});
+  const quotes = getClientQuotes(clientId);
+  const workflowContent = document.getElementById('ct-workflow');
+  if (workflowContent) {
+    workflowContent.innerHTML = renderWorkflow(clientId, checks, quotes);
+  }
 }
 async function toggleCheck(clientId, key) {
   const checks = lsGet('checks_'+clientId, {});
   const dates = lsGet('checkdates_'+clientId, {});
   const wasChecked = !!checks[key];
+  
   if (!wasChecked) {
     // Ticking ON - prompt for date
     const dateStr = await promptForDate(key);
@@ -1111,37 +1116,27 @@ async function toggleCheck(clientId, key) {
     checks[key] = true;
     dates[key] = dateStr;
   } else {
-    // Unticking - just remove
+    // Unticking - remove date
     checks[key] = false;
     delete dates[key];
   }
+  
+  // Save to local instantly
   lsSet('checks_'+clientId, checks);
   lsSet('checkdates_'+clientId, dates);
-  // Visual update
-  const checkboxes = document.querySelectorAll('.check-box');
-  checkboxes.forEach(cb => {
-    const onclick = cb.getAttribute('onclick') || '';
-    if (onclick.includes(key.replace(/'/g, "\\'"))) {
-      cb.classList.toggle('on', checks[key]);
-      const row = cb.closest('div').parentElement;
-      const text = row?.querySelector('.check-text');
-      if (text) text.classList.toggle('done', checks[key]);
-      // Update inline date display
-      const dateEl = row?.querySelector('.check-date');
-      if (dateEl) dateEl.textContent = dates[key] ? fmtDate(dates[key]) : '';
-    }
-  });
-  // Save to Drive in background
+  
+  // Save to Drive in background (non-blocking)
   if (driveConnected) {
     driveUploadJSON('checks_'+clientId+'.json', checks).catch(() => queueForSync('checks_'+clientId+'.json'));
     driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
   }
-  // Re-render to update step dates and stats
-  setTimeout(() => renderClientDetail(clientId).then(() => {
-    // Restore workflow tab
-    const wfTab = document.querySelector('#client-content [onclick*="ct-workflow"]');
-    if (wfTab) switchTab(wfTab, 'ct-workflow');
-  }), 100);
+  
+  // Re-render the workflow tab content in place (fast, no full client detail re-render)
+  const workflowContent = document.getElementById('ct-workflow');
+  if (workflowContent) {
+    const quotes = getClientQuotes(clientId);
+    workflowContent.innerHTML = renderWorkflow(clientId, checks, quotes);
+  }
 }
 
 // Promise-based date prompt modal
