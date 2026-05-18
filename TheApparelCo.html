@@ -842,13 +842,83 @@ function reAuthDrive(){
 
 // Check token every 5 minutes while app is open
 function startTokenWatcher(){
+  // Check token expiry every 5 minutes
   setInterval(()=>{
     if(driveConnected) checkTokenExpiry();
-  }, 5 * 60 * 1000); // every 5 min
-  // Also check on any user activity (click/keydown)
+  }, 5 * 60 * 1000);
+  
+  // Auto re-auth every 59 minutes to keep session alive seamlessly
+  setInterval(async ()=>{
+    if(!driveConnected) return;
+    const expiry = parseInt(localStorage.getItem('gd_token_expiry')||'0');
+    const remaining = expiry - Date.now();
+    // If less than 5 minutes left, silently re-auth in the background
+    if(remaining < 5 * 60 * 1000){
+      try {
+        await silentReAuth();
+      } catch(e) {
+        console.warn('Silent re-auth failed:', e);
+        showTokenBanner();
+      }
+    }
+  }, 59 * 60 * 1000);
+  
+  // Also check on any user activity
   document.addEventListener('click', ()=>{
     if(driveConnected) checkTokenExpiry();
   }, {passive:true, capture:false});
+}
+
+// Silent re-auth using an iframe so user sees nothing
+function silentReAuth(){
+  return new Promise((resolve, reject) => {
+    const state = Math.random().toString(36).slice(2);
+    sessionStorage.setItem('oauth_state', state);
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: location.origin + location.pathname,
+      response_type: 'token',
+      scope: SCOPES,
+      state,
+      prompt: 'none', // KEY: no UI shown, uses existing Google session
+      include_granted_scopes: 'true'
+    });
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = 'https://accounts.google.com/o/oauth2/auth?' + params;
+    const timeout = setTimeout(()=>{
+      iframe.remove();
+      reject(new Error('Silent re-auth timed out'));
+    }, 10000);
+    iframe.onload = () => {
+      try {
+        const hash = new URLSearchParams(iframe.contentWindow.location.hash.slice(1));
+        const token = hash.get('access_token');
+        const s = hash.get('state');
+        if(token && s === sessionStorage.getItem('oauth_state')){
+          accessToken = token;
+          const e = parseInt(hash.get('expires_in')||'3600');
+          localStorage.setItem('gd_token', token);
+          localStorage.setItem('gd_token_expiry', Date.now() + e * 1000);
+          clearTimeout(timeout);
+          iframe.remove();
+          // Flush any queued saves
+          setTimeout(()=>flushSyncQueue(), 500);
+          resolve();
+        } else {
+          clearTimeout(timeout);
+          iframe.remove();
+          reject(new Error('No token in silent response'));
+        }
+      } catch(e) {
+        // Cross-origin error means it needs user interaction
+        clearTimeout(timeout);
+        iframe.remove();
+        reject(e);
+      }
+    };
+    document.body.appendChild(iframe);
+  });
 }
 function skipConnect(){driveConnected=false;showApp();}
 function showConnectScreen(){document.getElementById('connect-screen').style.display='flex';loadTheme();document.getElementById('app').style.display='none';}
