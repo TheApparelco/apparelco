@@ -1185,7 +1185,7 @@ async function saveClient(){
   if(btn.disabled)return;
   btn.disabled=true;btn.textContent='Saving…';
   const brand=document.getElementById('f-brand').value.trim();
-  if(!brand){alert('Brand name required');btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';return;}
+  if(!brand){await themedAlert('Brand name required','Please enter a brand name before saving.','⚠️');btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';return;}
   let c=editingId?clients.find(x=>String(x.id)===String(editingId)):{id:Date.now(),status:'active',fileIndex:{}};
   if(!c){btn.disabled=false;return;}
   ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
@@ -1472,7 +1472,7 @@ function resolveDatePrompt(useDate) {
 let activeStepClient=null,activeStepKey=null;
 function triggerStepUpload(clientId,stepKey){activeStepClient=clientId;activeStepKey=stepKey;document.getElementById('step-input').click();}
 async function handleStepFiles(e){const files=Array.from(e.target.files);const stepFiles=lsGet('stepfiles_'+activeStepClient,{});if(!stepFiles[activeStepKey])stepFiles[activeStepKey]=[];for(const f of files){const du=await readAsDataUrl(f);const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');stepFiles[activeStepKey].push({name:nm,size:f.size,data:du});if(driveConnected){try{await driveUploadBinary('stepfile_'+activeStepClient+'_'+Date.now()+'_'+nm,du);}catch{}}}lsSet('stepfiles_'+activeStepClient,stepFiles);e.target.value='';renderClientDetail(activeStepClient);}
-function delStepFile(clientId,stepKey,idx){if(!confirm('Remove?'))return;const sf=lsGet('stepfiles_'+clientId,{});if(sf[stepKey]){sf[stepKey].splice(idx,1);lsSet('stepfiles_'+clientId,sf);}renderClientDetail(clientId);}
+async function delStepFile(clientId,stepKey,idx){const _ok=await themedConfirm('Remove file?','Remove this attachment?','Remove','🗑️');if(!_ok)return;const sf=lsGet('stepfiles_'+clientId,{});if(sf[stepKey]){sf[stepKey].splice(idx,1);lsSet('stepfiles_'+clientId,sf);}renderClientDetail(clientId);}
 
 // PHOTOS & DOCS
 let activeUploadClient=null;
@@ -1482,9 +1482,9 @@ function readAsDataUrl(file){return new Promise(res=>{const fr=new FileReader();
 async function handlePhotoFiles(e){const files=Array.from(e.target.files).filter(f=>f.type.startsWith('image/'));setSyncStatus('syncing');for(const f of files){const du=await readAsDataUrl(f);const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');await saveFileData(activeUploadClient,'photos',nm,du);}e.target.value='';setSyncStatus('synced');renderClientDetail(activeUploadClient);}
 async function handleDocFiles(e){const files=Array.from(e.target.files);setSyncStatus('syncing');for(const f of files){const du=await readAsDataUrl(f);const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');await saveFileData(activeUploadClient,'techpacks',nm,du);}e.target.value='';setSyncStatus('synced');renderClientDetail(activeUploadClient);}
 async function handleFactoryInvFiles(e){const files=Array.from(e.target.files);setSyncStatus('syncing');for(const f of files){const du=await readAsDataUrl(f);const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');await saveFileData(activeUploadClient,'factoryinvoices',nm,du);}e.target.value='';setSyncStatus('synced');renderClientDetail(activeUploadClient);}
-async function delPhoto(clientId,filename){if(!confirm('Delete?'))return;await deleteFileData(clientId,'photos',filename);renderClientDetail(clientId);}
-async function delDoc(clientId,filename){if(!confirm('Delete?'))return;await deleteFileData(clientId,'techpacks',filename);renderClientDetail(clientId);}
-async function delFactoryInv(clientId,filename){if(!confirm('Delete?'))return;await deleteFileData(clientId,'factoryinvoices',filename);renderClientDetail(clientId);}
+async function delPhoto(clientId,filename){const _ok=await themedConfirm('Delete photo?','Delete this photo? This cannot be undone.','Delete','🗑️');if(!_ok)return;await deleteFileData(clientId,'photos',filename);renderClientDetail(clientId);}
+async function delDoc(clientId,filename){const _ok=await themedConfirm('Delete document?','Delete this document? This cannot be undone.','Delete','🗑️');if(!_ok)return;await deleteFileData(clientId,'techpacks',filename);renderClientDetail(clientId);}
+async function delFactoryInv(clientId,filename){const _ok=await themedConfirm('Delete factory invoice?','Delete this factory invoice? This cannot be undone.','Delete','🗑️');if(!_ok)return;await deleteFileData(clientId,'factoryinvoices',filename);renderClientDetail(clientId);}
 let slidePhotos=[],slideIdx=0;
 function openSlideshow(clientId,idx){slidePhotos=listFilesData(clientId,'photos').filter(p=>p.data);slideIdx=idx;showSlide();document.getElementById('slideshow').classList.add('open');}
 function showSlide(){document.getElementById('slideshow-img').src=slidePhotos[slideIdx]?.data||'';document.getElementById('slideshow-caption').textContent=(slideIdx+1)+' / '+slidePhotos.length+' — '+(slidePhotos[slideIdx]?.name||'');}
@@ -1517,21 +1517,10 @@ async function saveNewQuote(){
 }
 function viewQuote(clientId,idx){const c=clients.find(x=>String(x.id)===String(clientId));const q=getClientQuotes(clientId)[idx];if(!q)return;const s=sym(q.cur||c?.currency||'EUR');document.getElementById('quote-modal-title').textContent='Quote '+q.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">Quote '+q.number+'</div><div class="inv-meta">'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Prepared for</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div>'+(c?.address?'<div style="font-size:12px;color:#666;margin-top:2px">'+c.address+(c.country?', '+c.country:'')+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th style="text-align:right">Total</th></tr></thead><tbody>'+q.styles.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(q.ivaAmt?'<tr><td>IVA ('+q.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+q.ivaAmt.toFixed(2)+'</td></tr>':'')+(q.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+q.ship.toFixed(2)+'</td></tr>':'')+q.samples.map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:220px;margin-left:auto"><div class="inv-total-line grand"><span>Total</span><span>'+s+q.totalClient.toFixed(2)+'</span></div></div><div class="inv-footer">This quote is valid until '+fmtDate(q.validUntil)+'. '+getCompanyInfo().footer+'</div></div><div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px;color:var(--text3)">Status:</span><select class="btn btn-sm" onchange="updateQuoteStatus(\''+clientId+'\','+idx+',this.value)"><option value="pending"'+(q.status==='pending'?' selected':'')+'>Pending</option><option value="accepted"'+(q.status==='accepted'?' selected':'')+'>Accepted</option><option value="rejected"'+(q.status==='rejected'?' selected':'')+'>Rejected</option></select></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadQuotePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadQuoteHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-primary" onclick="convertQuoteToInvoice(\''+clientId+'\','+idx+');closeModal(\'quote-modal\')">Convert to invoice →</button>';document.getElementById('quote-modal').classList.add('open');}
 function updateQuoteStatus(clientId,idx,status){const quotes=getClientQuotes(clientId);if(quotes[idx]){quotes[idx].status=status;saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}}
-function deleteQuote(clientId,idx){if(!confirm('Delete this quote?'))return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
+async function deleteQuote(clientId,idx){const _ok=await themedConfirm('Delete quote?','Delete this quote permanently?','Delete','🗑️');if(!_ok)return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
 async function convertQuoteToInvoice(clientId,idx){
-  const q=getClientQuotes(clientId)[idx];if(!q)return;
-  const ok = await themedConfirm('Create invoice?', 'This will create a new invoice based on quote '+q.number+'.', 'Create invoice', '🧾');
-  if (!ok) return;
-  const c=clients.find(x => String(x.id) === String(clientId));
-  const co=getCompanyInfo();
-  const prefix=co.invPrefix||'TAC';
-  const invNum=prefix+'-'+Date.now().toString().slice(-5);
-  const inv={id:Date.now(),number:invNum,date:today(),cur:q.cur||c?.currency||'EUR',styles:q.styles,samples:q.samples,iva:q.iva,ship:q.ship,stylesSub:q.stylesSub,ivaAmt:q.ivaAmt,sampTotal:q.sampTotal,totalClient:q.totalClient,totalFactory:q.totalFactory,profit:q.profit,amountPaid:0,payments:[],fromQuote:q.number};
-  const invs=getClientInvoices(clientId);invs.unshift(inv);saveClientInvoices(clientId,invs);
-  showToast('Invoice '+invNum+' created ✓');
-  await renderClientDetail(clientId);
-  const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
-  if (tab) switchTab(tab, 'ct-invoices');
+  // Open the invoice creator pre-selecting this quote — gives user payment type choice
+  openInvoiceCreator(clientId, idx);
 }
 
 // PAYMENTS & INVOICE RECORDS
@@ -1540,7 +1529,7 @@ function viewInvoiceRecord(clientId,idx){const invs=getClientInvoices(clientId);
 function openPaymentModal(clientId,invIdx){activePaymentClientId=clientId;activePaymentInvIdx=invIdx;activePaymentProof=null;const invs=getClientInvoices(clientId);const inv=invs[invIdx];const c=clients.find(x=>String(x.id)===String(clientId));const s=sym(inv.cur||c?.currency||'EUR');const dueAmt=inv.amountDue!=null?inv.amountDue:(inv.totalClient||0);const remaining=Math.max(0,dueAmt-(inv.amountPaid||0));document.getElementById('payment-modal-body').innerHTML='<div style="margin-bottom:14px;font-size:13px;color:var(--text3)">Invoice '+inv.number+' · Outstanding: <strong style="color:var(--amber)">'+s+remaining.toFixed(2)+'</strong></div><div class="grid2"><div class="field"><label>Amount paid</label><input id="pay-amount" type="number" step="0.01" value="'+remaining.toFixed(2)+'"></div><div class="field"><label>Date</label><input id="pay-date" type="date" value="'+today()+'"></div></div><div class="field"><label>Payment method</label><select id="pay-method"><option>Bank transfer</option><option>PayPal</option><option>Wise</option><option>Cash</option><option>Other</option></select></div><div class="field"><label>Notes</label><input id="pay-notes" placeholder="Optional reference"></div><div class="upload-zone" onclick="document.getElementById(\'payment-proof-input\').click()" style="margin-top:8px"><div style="font-size:18px;margin-bottom:4px">📎</div><div style="font-size:12px;color:var(--text3)" id="proof-label">Upload proof of payment (optional)</div></div>';document.getElementById('payment-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'payment-modal\')">Cancel</button><button class="btn btn-primary" onclick="savePayment()">Save payment</button>';document.getElementById('payment-modal').classList.add('open');}
 function handlePaymentProof(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{activePaymentProof={name:file.name,data:ev.target.result,size:file.size};document.getElementById('proof-label').textContent='✓ '+file.name;};reader.readAsDataURL(file);e.target.value='';}
 async function savePayment(){const amount=parseNum(document.getElementById('pay-amount').value, 0);const date=document.getElementById('pay-date').value;const method=document.getElementById('pay-method').value;const notes=document.getElementById('pay-notes').value;const invs=getClientInvoices(activePaymentClientId);const inv=invs[activePaymentInvIdx];if(!inv)return;if(!inv.payments)inv.payments=[];const payment={id:Date.now(),amount,date,method,notes};if(activePaymentProof){payment.proof=activePaymentProof.name;await saveFileData(activePaymentClientId,'paymentproofs',activePaymentProof.name,activePaymentProof.data);}inv.payments.push(payment);inv.amountPaid=(inv.amountPaid||0)+amount;saveClientInvoices(activePaymentClientId,invs);closeModal('payment-modal');showToast('Payment recorded ✓');const cid=activePaymentClientId;await renderClientDetail(cid);renderDashboard();const tab=document.querySelector('#client-content [onclick*="ct-invoices"]');if(tab)switchTab(tab,'ct-invoices');}
-function deleteInvoiceRecord(clientId,idx){if(!confirm('Delete this invoice record?'))return;const invs=getClientInvoices(clientId);invs.splice(idx,1);saveClientInvoices(clientId,invs);renderClientDetail(clientId);}
+async function deleteInvoiceRecord(clientId,idx){const _ok=await themedConfirm('Delete invoice?','Delete this invoice record permanently?','Delete','🗑️');if(!_ok)return;const invs=getClientInvoices(clientId);invs.splice(idx,1);saveClientInvoices(clientId,invs);renderClientDetail(clientId);}
 async function saveInvoiceToClient(){
   const cid=document.getElementById('p-client').value;
   if(!cid){showToast('Select a client first');return;}
@@ -1987,7 +1976,7 @@ function createBlankInvoiceForClient(clientId) {
   openInvoiceCreator(clientId);
 }
 
-function openInvoiceCreator(clientId) {
+function openInvoiceCreator(clientId, preselectQuoteIdx) {
   const c = clients.find(x => String(x.id) === String(clientId));
   if (!c) return;
   const quotes = getClientQuotes(clientId);
@@ -2017,6 +2006,11 @@ function openInvoiceCreator(clientId) {
   
   // Quote options
   if (quotes.length) {
+    // Auto-trigger if a specific quote was pre-selected (from → Invoice button)
+    if (preselectQuoteIdx !== undefined) {
+      setTimeout(() => useQuoteForInvoice(clientId, preselectQuoteIdx), 50);
+      return;
+    }
     quotes.forEach((q, i) => {
       const statusColor = q.status === 'accepted' ? 'var(--green)' : q.status === 'rejected' ? 'var(--red)' : 'var(--amber)';
       html += '<div class="card-tap" style="padding:12px 14px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:6px;display:flex;align-items:center;gap:12px" onclick="useQuoteForInvoice(\''+clientId+'\','+i+')">';
@@ -2079,16 +2073,18 @@ function createBlankInvoiceFromScratch(clientId) {
 async function useQuoteForInvoice(clientId, quoteIdx) {
   const q = getClientQuotes(clientId)[quoteIdx];
   if (!q) return;
+  // Read payment type BEFORE confirm closes the modal
+  const invType = getSelectedInvoiceType();
   const ok = await themedConfirm('Create invoice?', 'Use quote '+q.number+' as the basis for this invoice.', 'Create invoice', '🧾');
   if (!ok) return;
   closeModal('quote-modal');
-  createInvoiceFromQuoteDirect(clientId, quoteIdx);
+  createInvoiceFromQuoteDirect(clientId, quoteIdx, invType);
 }
-async function createInvoiceFromQuoteDirect(clientId, idx) {
+async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   const c = clients.find(x => String(x.id) === String(clientId));
   const q = getClientQuotes(clientId)[idx];
   if (!q) return;
-  const invType = getSelectedInvoiceType();
+  const invType = passedType || getSelectedInvoiceType();
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
   const fullTotal = q.totalClient;
@@ -2125,6 +2121,8 @@ async function combineQuotesIntoInvoice(clientId) {
   if (!c) return;
   const checkboxes = document.querySelectorAll('.multi-q-cb:checked');
   if (!checkboxes.length) { showToast('Select at least one quote'); return; }
+  // Read type BEFORE confirm
+  const invType = getSelectedInvoiceType();
   const ok = await themedConfirm('Combine quotes?', 'Merge ' + checkboxes.length + ' quote' + (checkboxes.length>1?'s':'') + ' into a single invoice.', 'Combine & create', '🧾');
   if (!ok) return;
   const selectedIdxs = Array.from(checkboxes).map(cb => parseInt(cb.dataset.idx));
@@ -2150,7 +2148,6 @@ async function combineQuotesIntoInvoice(clientId) {
   
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
-  const invType = getSelectedInvoiceType();
   let amountDue = totalClient;
   let typeLabel = '';
   if (invType === 'deposit') { amountDue = totalClient / 2; typeLabel = ' (50% Deposit)'; }
@@ -3152,6 +3149,33 @@ function loadInvoiceDefaults() {
   if (pIva)  pIva.value  = co.invIva  || '23';
   if (pFx)   pFx.value   = co.invFx   || '2';
   if (pShip) pShip.value = co.invShip || '200';
+}
+
+
+// THEMED ALERT (single button)
+let _alertResolve = null;
+function themedAlert(title, msg, icon) {
+  return new Promise(resolve => {
+    _alertResolve = resolve;
+    document.getElementById('confirm-title').textContent = title || 'Notice';
+    document.getElementById('confirm-msg').textContent = msg || '';
+    document.getElementById('confirm-icon').textContent = icon || 'ℹ️';
+    document.getElementById('confirm-ok-btn').textContent = 'OK';
+    // Hide cancel button for alerts
+    const cancelBtn = document.querySelector('#confirm-modal .btn:not(#confirm-ok-btn)');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    document.getElementById('confirm-modal').classList.add('open');
+    setTimeout(() => document.getElementById('confirm-ok-btn').focus(), 50);
+  });
+}
+// Override resolveConfirm to restore cancel button visibility
+const _origResolveConfirm = resolveConfirm;
+function resolveConfirm(answer) {
+  const cancelBtn = document.querySelector('#confirm-modal .btn:not(#confirm-ok-btn)');
+  if (cancelBtn) cancelBtn.style.display = '';
+  if (_alertResolve) { _alertResolve(); _alertResolve = null; }
+  document.getElementById('confirm-modal').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(answer); _confirmResolve = null; }
 }
 
 // KEYBOARD & START
