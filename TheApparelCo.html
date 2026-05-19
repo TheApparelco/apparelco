@@ -433,6 +433,20 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <div class="field"><label>Client / brand</label><input id="i-client" oninput="buildInvoice()"></div>
           <div class="field"><label>Payment terms</label><input id="i-terms" oninput="buildInvoice()"></div>
         </div>
+        <div class="field"><label>Invoice category</label>
+          <select id="i-issample" onchange="toggleInvoiceTypeSample()" style="font-size:14px">
+            <option value="0">Production invoice (bulk order)</option>
+            <option value="1">Sample invoice (prototypes / development)</option>
+          </select>
+        </div>
+        <div id="i-protofee-wrap" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid var(--accent)">
+          <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin-bottom:8px">Sample-only fields</div>
+          <div class="grid2">
+            <div class="field"><label>Prototype Development Fee (€)</label><input id="i-protofee" type="number" value="0" oninput="buildInvoice()" placeholder="Refundable on bulk order"></div>
+            <div class="field"><label>Commission (%) — invisible to client</label><input id="i-samplecomm" type="number" value="0" oninput="buildInvoice()" placeholder="0 = no commission"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">The Prototype Development Fee is refundable if the client moves to bulk production within 60 days of sample approval. Commission is hidden from the client document.</div>
+        </div>
         <div class="field"><label>Invoice type</label>
           <select id="i-invtype" onchange="buildInvoice()" style="font-size:14px">
             <option value="deposit">50% Deposit — first payment, before production</option>
@@ -1077,6 +1091,8 @@ function downloadBackup(){
     company: lsGet('tac_company', {}),
     invCounter: lsGet('tac_inv_counter', '0'),
     quoteCounter: lsGet('tac_quote_counter', '0'),
+    sampleInvCounter: lsGet('tac_sample_inv_counter', '0'),
+    sampleQuoteCounter: lsGet('tac_sample_quote_counter', '0'),
     benchmarks: lsGet('tac_benchmarks', null),
     logo: lsGet('tac_logo', null),
     logoSize: lsGet('tac_logo_size', 'm'),
@@ -1301,10 +1317,10 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(c.notes?'<div class="detail-row"><span class="detail-key">Notes</span><span class="detail-val">'+c.notes+'</span></div>':'')
 +'</div></div></div>'
 +'<div id="ct-quotes" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Quotes</span><button class="btn btn-sm" onclick="openNewQuote(\''+id+'\')">+ New quote</button></div><div>'
-+(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
++(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
 +'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -1323,10 +1339,35 @@ function switchTab(btn,tabId){const container=btn.closest('#client-content');con
 
 // WORKFLOW
 const PHASES=[
-  {name:'Onboarding',items:[{label:'Tech pack received',upload:true},{label:'Quote sent to client',upload:false},{label:'Deposit invoice sent (50%)',upload:false},{label:'Deposit payment confirmed',upload:false}]},
-  {name:'Sampling',items:[{label:'Factory briefed on sample',upload:false},{label:'Sample in production — update sent',upload:true},{label:'Sample ready — photos sent to client',upload:true},{label:'Sample approved by client',upload:false}]},
-  {name:'Bulk production',items:[{label:'Fabric & trims ordered — update sent',upload:true},{label:'Bulk production started — update sent',upload:true},{label:'Mid-production photos sent to client',upload:true},{label:'Full payment schedule confirmed',upload:false}]},
-  {name:'QC & dispatch',items:[{label:'QC completed — photos sent to client',upload:true},{label:'Final invoice sent (50% balance)',upload:false},{label:'Balance payment confirmed',upload:false},{label:'Order packed & dispatched',upload:true},{label:'Tracking number sent to client',upload:false},{label:'Delivery confirmed with client',upload:false}]}
+  {name:'Onboarding',items:[
+    {label:'Tech pack received',upload:true},
+    {label:'Quote sent to client',upload:false},
+    {label:'Sample quote sent to client',upload:false},
+    {label:'Sample invoice sent',upload:false},
+    {label:'Sample payment confirmed',upload:false}
+  ]},
+  {name:'Sampling',items:[
+    {label:'Factory briefed on sample',upload:false},
+    {label:'Sample in production — update sent',upload:true},
+    {label:'Sample ready — photos sent to client',upload:true},
+    {label:'Sample shipped to client',upload:false},
+    {label:'Sample approved by client',upload:false}
+  ]},
+  {name:'Bulk production',items:[
+    {label:'Deposit invoice sent (50%)',upload:false},
+    {label:'Deposit payment confirmed',upload:false},
+    {label:'Fabric & trims ordered — update sent',upload:true},
+    {label:'Bulk production started — update sent',upload:true},
+    {label:'Mid-production photos sent to client',upload:true}
+  ]},
+  {name:'QC & dispatch',items:[
+    {label:'QC completed — photos sent to client',upload:true},
+    {label:'Final invoice sent (50% balance)',upload:false},
+    {label:'Balance payment confirmed',upload:false},
+    {label:'Order packed & dispatched',upload:true},
+    {label:'Tracking number sent to client',upload:false},
+    {label:'Delivery confirmed with client',upload:false}
+  ]}
 ];
 function renderWorkflow(clientId,checks,quotes){
   const stepFiles = lsGet('stepfiles_'+clientId, {});
@@ -1496,18 +1537,74 @@ function closeSlideshow(){document.getElementById('slideshow').classList.remove(
 
 // QUOTES
 let activeQuoteClientId=null,qStyleIdx=0,qSampleIdx=0;
-function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value=\"'+peekNextQuoteNumber()+'\"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
+function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="field" style="margin-bottom:12px"><label>Quote type</label><select id="q-issample" onchange="toggleQuoteType()" style="font-size:14px"><option value="0">Production quote (full collection)</option><option value="1">Sample quote (prototypes only)</option></select></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value=\"'+peekNextQuoteNumber()+'\"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div id="q-protofee-wrap" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid var(--accent)"><div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin-bottom:8px">Sample-only fields</div><div class="grid2"><div class="field"><label>Prototype Development Fee (€)</label><input id="q-protofee" type="number" value="0" oninput="updateQuotePreview()" placeholder="Refundable if production within 60 days"></div><div class="field"><label>Commission (%) — invisible to client</label><input id="q-samplecomm" type="number" value="0" oninput="updateQuotePreview()" placeholder="0 = no commission"></div></div><div style="font-size:11px;color:var(--text3);margin-top:6px">The Prototype Development Fee is refundable if the client moves to bulk production within 60 days of sample approval. Commission is hidden from the client document.</div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
 function addQuoteStyle(dc){qStyleIdx++;const wrap=document.getElementById('q-styles-wrap');const div=document.createElement('div');div.className='style-block';div.id='qs-'+qStyleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qs-'+qStyleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Style '+qStyleIdx+'</div><div class="grid2" style="margin-bottom:8px"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. hoodie — black" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Size range</label><input placeholder="e.g. XS-XL" oninput="updateQuotePreview()"></div></div><div class="grid3"><div class="field" style="margin:0"><label>Units</label><input type="number" value="300" min="1" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price/unit (€)</label><input type="number" value="18.00" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="'+(dc||20)+'" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function addQuoteSample(){qSampleIdx++;const wrap=document.getElementById('q-samples-wrap');const div=document.createElement('div');div.className='style-block';div.id='qsamp-'+qSampleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qsamp-'+qSampleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Sample '+qSampleIdx+'</div><div class="grid3"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. size M" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price (€)</label><input type="number" value="45" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="100" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function getQuoteStyles(){return Array.from(document.querySelectorAll('.style-block[id^="qs-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Style',sizes=inp[1].value||'',units=parseInt(inp[2].value)||0,fp=parseFloat(inp[3].value)||0,co=parseFloat(inp[4].value)||0,ppu=fp*(1+co/100);return{desc,sizes,units,fp,co,ppu,subtotal:ppu*units};});}
 function getQuoteSamples(){return Array.from(document.querySelectorAll('.style-block[id^="qsamp-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Sample',fp=parseFloat(inp[1].value)||0,co=parseFloat(inp[2].value)||100;return{desc,fp,co,total:fp*(1+co/100)};});}
-function updateQuotePreview(){const prev=document.getElementById('q-total-preview');if(!prev)return;const styles=getQuoteStyles(),samples=getQuoteSamples();const iva=parseNum(document.getElementById('q-iva')?.value, 23),ship=parseNum(document.getElementById('q-ship')?.value, 0),cur=document.getElementById('q-cur')?.value||'EUR',s=sym(cur);const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),total=stylesSub+ivaAmt+ship+sampTotal,factoryTotal=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0),profit=total-factoryTotal;prev.innerHTML='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px"><span style="color:var(--text3)">Client total: <strong style="color:var(--accent)">'+s+total.toFixed(2)+'</strong></span><span style="color:var(--text3)">Factory cost: <strong style="color:var(--amber)">'+s+factoryTotal.toFixed(2)+'</strong></span><span style="color:var(--text3)">Your profit: <strong style="color:var(--green)">'+s+profit.toFixed(2)+'</strong></span></div>';}
+function updateQuotePreview(){
+  const prev=document.getElementById('q-total-preview');
+  if(!prev)return;
+  const isSample = document.getElementById('q-issample')?.value === '1';
+  const styles=getQuoteStyles(),samples=getQuoteSamples();
+  const iva=parseNum(document.getElementById('q-iva')?.value, 23);
+  const ship=parseNum(document.getElementById('q-ship')?.value, 0);
+  const cur=document.getElementById('q-cur')?.value||'EUR',s=sym(cur);
+  const protoFee = isSample ? parseNum(document.getElementById('q-protofee')?.value, 0) : 0;
+  const sampleCommPct = isSample ? parseNum(document.getElementById('q-samplecomm')?.value, 0) : 0;
+  const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0);
+  const ivaAmt=stylesSub*(iva/100);
+  const sampTotal=samples.reduce((a,x)=>a+x.total,0);
+  // For samples, commission is on factory price (invisible add-on)
+  const factoryTotal=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);
+  const sampleCommAmt = isSample ? factoryTotal * (sampleCommPct/100) : 0;
+  const total = isSample
+    ? (factoryTotal + sampleCommAmt + protoFee + ship)
+    : (stylesSub + ivaAmt + ship + sampTotal);
+  const profit = isSample
+    ? (sampleCommAmt + protoFee)
+    : (total - factoryTotal);
+  prev.innerHTML = '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
+    '<span style="color:var(--text3)">Client total: <strong style="color:var(--accent)">'+s+total.toFixed(2)+'</strong></span>' +
+    '<span style="color:var(--text3)">Factory cost: <strong style="color:var(--amber)">'+s+factoryTotal.toFixed(2)+'</strong></span>' +
+    '<span style="color:var(--text3)">Your profit: <strong style="color:var(--green)">'+s+profit.toFixed(2)+'</strong></span>' +
+    (isSample && protoFee > 0 ? '<span style="color:var(--text3);width:100%;font-size:11px;font-style:italic;margin-top:4px">Includes '+s+protoFee.toFixed(2)+' Prototype Development Fee (refundable on bulk order within 60 days)</span>' : '') +
+    '</div>';
+}
 async function saveNewQuote(){
-  const ok = await themedConfirm('Create quote?', 'You can edit or delete it later if needed.', 'Create quote', '📄');
+  const isSample = document.getElementById('q-issample')?.value === '1';
+  const ok = await themedConfirm(isSample ? 'Create sample quote?' : 'Create quote?', 'You can edit or delete it later if needed.', 'Create quote', isSample ? '🧵' : '📄');
   if (!ok) return;
-  const styles=getQuoteStyles(),samples=getQuoteSamples(),iva=parseNum(document.getElementById('q-iva').value, 23),ship=parseNum(document.getElementById('q-ship').value, 0),cur=document.getElementById('q-cur').value;
-  const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);
-  const quote={id:Date.now(),number:document.getElementById('q-num').value || getNextQuoteNumber(),date:document.getElementById('q-date').value,validUntil:document.getElementById('q-valid').value,cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};
+  const styles=getQuoteStyles(),samples=getQuoteSamples();
+  const iva=parseNum(document.getElementById('q-iva').value, 23);
+  const ship=parseNum(document.getElementById('q-ship').value, 0);
+  const cur=document.getElementById('q-cur').value;
+  const protoFee = isSample ? parseNum(document.getElementById('q-protofee')?.value, 0) : 0;
+  const sampleCommPct = isSample ? parseNum(document.getElementById('q-samplecomm')?.value, 0) : 0;
+  const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0);
+  const ivaAmt=stylesSub*(iva/100);
+  const sampTotal=samples.reduce((a,x)=>a+x.total,0);
+  const totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);
+  const sampleCommAmt = isSample ? totalFactory * (sampleCommPct/100) : 0;
+  const totalClient = isSample
+    ? (totalFactory + sampleCommAmt + protoFee + ship)
+    : (stylesSub + ivaAmt + ship + sampTotal);
+  const profit = isSample
+    ? (sampleCommAmt + protoFee)
+    : (totalClient - totalFactory);
+  const quote={
+    id:Date.now(),
+    number:document.getElementById('q-num').value || getNextQuoteNumber(isSample),
+    date:document.getElementById('q-date').value,
+    validUntil:document.getElementById('q-valid').value,
+    cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,
+    profit,
+    isSample: isSample,
+    protoFee: protoFee,
+    sampleCommPct: sampleCommPct,
+    sampleCommAmt: sampleCommAmt,
+    status:'pending'
+  };
   const clientId = activeQuoteClientId;
   const quotes=getClientQuotes(clientId);quotes.unshift(quote);saveClientQuotes(clientId,quotes);
   closeModal('quote-modal');
@@ -1535,14 +1632,22 @@ async function deleteInvoiceRecord(clientId,idx){const _ok=await themedConfirm('
 async function saveInvoiceToClient(){
   const cid=document.getElementById('p-client').value;
   if(!cid){showToast('Select a client first');return;}
+  const isSample = document.getElementById('i-issample')?.value === '1';
   const d=invoicePayload;
-  const invType=document.getElementById('i-invtype')?.value||'full';
-  const grand=d.grand||0;
-  const amountDue = invType==='deposit'||invType==='balance' ? grand/2 : grand;
+  const invType = isSample ? 'full' : (document.getElementById('i-invtype')?.value||'full');
+  const protoFee = isSample ? parseNum(document.getElementById('i-protofee')?.value, 0) : 0;
+  const sampleCommPct = isSample ? parseNum(document.getElementById('i-samplecomm')?.value, 0) : 0;
+  const factoryTotal = d.factoryTotal||(d.garments||[]).reduce((a,g)=>a+g.fp*g.units,0)+(d.samples||[]).reduce((a,x)=>a+x.fp,0);
+  const sampleCommAmt = isSample ? factoryTotal * (sampleCommPct/100) : 0;
+  // For sample invoices: client total = factory + commission + proto fee + shipping
+  // For production invoices: keep existing logic
+  const baseGrand = d.grand || 0;
+  const grand = isSample ? (factoryTotal + sampleCommAmt + protoFee + (d.ship||0)) : baseGrand;
+  const amountDue = (invType==='deposit'||invType==='balance') ? grand/2 : grand;
   const typeLabel = invType==='deposit'?' (50% Deposit)':invType==='balance'?' (50% Balance)':'';
-  const ok = await themedConfirm('Save invoice?','Save this invoice to the client record?','Save invoice','🧾');
+  const ok = await themedConfirm(isSample ? 'Save sample invoice?' : 'Save invoice?', 'Save this invoice to the client record?', 'Save invoice', isSample ? '🧵' : '🧾');
   if(!ok) return;
-  const invNum = getNextInvoiceNumber();
+  const invNum = getNextInvoiceNumber(isSample);
   const inv={
     id:Date.now(),
     number:invNum,
@@ -1556,14 +1661,18 @@ async function saveInvoiceToClient(){
     amountDue:amountDue,
     invType:invType,
     typeLabel:typeLabel,
-    totalFactory:d.factoryTotal||(d.garments||[]).reduce((a,g)=>a+g.fp*g.units,0),
-    profit:grand-((d.garments||[]).reduce((a,g)=>a+g.fp*g.units,0)+(d.samples||[]).reduce((a,x)=>a+x.fp,0)),
+    isSample:isSample,
+    protoFee:protoFee,
+    sampleCommPct:sampleCommPct,
+    sampleCommAmt:sampleCommAmt,
+    totalFactory:factoryTotal,
+    profit: isSample ? (sampleCommAmt + protoFee) : (grand - factoryTotal),
     amountPaid:0,payments:[]
   };
   const invs=getClientInvoices(cid);
   invs.unshift(inv);
   saveClientInvoices(cid,invs);
-  showToast('Invoice saved to client record ✓');
+  showToast(isSample ? 'Sample invoice saved ✓' : 'Invoice saved to client record ✓');
 }
 
 // PRICING
@@ -1604,7 +1713,22 @@ function buildInvoiceTotals(s, grand) {
 function buildInvoice(){const d=invoicePayload,cur=document.getElementById('i-cur').value,s=sym(cur);const client=document.getElementById('i-client').value||'—',num=document.getElementById('i-num').value||'TAC-001',date=document.getElementById('i-date').value||today();const due=parseNum(document.getElementById('i-due').value, 14),terms=document.getElementById('i-terms').value;const dueDate=new Date(date);dueDate.setDate(dueDate.getDate()+due);const dueDateStr=dueDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});const cid=document.getElementById('p-client')?.value,cl=clients.find(x=>String(x.id)===String(cid));const hasData=d.garments&&d.garments.length>0;document.getElementById('invoice-preview').innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number">'+num+'</div><div class="inv-meta">'+date+'<br>Due: '+dueDateStr+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+client+'</div>'+(cl?.address?'<div style="font-size:12px;color:#666;margin-top:2px">'+cl.address+(cl.country?', '+cl.country:'')+'</div>':'')+(cl?.vat?'<div style="font-size:12px;color:#999">VAT: '+cl.vat+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(hasData?d.garments.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join(''):'')+(hasData&&d.ivaAmt?'<tr><td>IVA ('+d.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+d.ivaAmt.toFixed(2)+'</td></tr>':'')+(hasData&&d.fxAmt?'<tr><td>FX fee ('+d.fx+'%)</td><td></td><td></td><td style="text-align:right">'+s+d.fxAmt.toFixed(2)+'</td></tr>':'')+(hasData&&d.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+d.ship.toFixed(2)+'</td></tr>':'')+(d.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+(!hasData&&!(d.samples||[]).length?'<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">Go to Pricing → Generate invoice</td></tr>':'')+'</tbody></table><hr class="inv-hr">'+buildInvoiceTotals(s, d.grand||0)+'<div class="inv-footer">Payment terms: '+terms+'<br>'+getCompanyInfo().footer+'</div><div style="margin-top:14px;padding-top:14px;border-top:0.5px solid #eee"><button class="btn btn-sm btn-primary" onclick="saveInvoiceToClient()" style="background:var(--accent);color:#0f0f0f;border-color:var(--accent)">Save to client record</button></div>';}
 
 // REPORTS
-function generateReport(){const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);let filtered=filterClientsByStatus(clients, sf);const rows=[];let totR=0,totF=0,totP=0,totPaid=0,totOut=0;filtered.forEach(c=>{const invs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0),factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0),profit=invs.reduce((a,inv)=>a+(inv.profit||0),0),paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0),outstanding=revenue-paid;totR+=revenue;totF+=factory;totP+=profit;totPaid+=paid;totOut+=outstanding;rows.push({brand:c.brand,country:c.country||'—',currency:c.currency||'EUR',invoices:invs.length,revenue,factory,profit,paid,outstanding,status:c.status});});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">€'+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">€'+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Revenue</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500">'+r.brand+'</td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+r.status+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
+function generateReport(){const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);let filtered=filterClientsByStatus(clients, sf);const rows=[];let totR=0,totF=0,totP=0,totPaid=0,totOut=0;let totSampleR=0;
+filtered.forEach(c=>{
+  const allInvs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});
+  // Production invoices (exclude samples to avoid mixing in revenue)
+  const invs = allInvs.filter(inv => !inv.isSample);
+  const sampleInvs = allInvs.filter(inv => inv.isSample);
+  const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0);
+  const factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0);
+  const profit=invs.reduce((a,inv)=>a+(inv.profit||0),0);
+  const paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);
+  const outstanding=revenue-paid;
+  const sampleRevenue = sampleInvs.reduce((a,inv)=>a+(inv.totalClient||0),0);
+  const sampleProfit = sampleInvs.reduce((a,inv)=>a+(inv.profit||0),0);
+  totR+=revenue;totF+=factory;totP+=profit;totPaid+=paid;totOut+=outstanding;totSampleR+=sampleRevenue;
+  rows.push({brand:c.brand,country:c.country||'—',currency:c.currency||'EUR',invoices:invs.length,sampleInvoices:sampleInvs.length,revenue,factory,profit,paid,outstanding,sampleRevenue,sampleProfit,status:c.status});
+});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Production revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div>'+(totSampleR>0?'<div class="stat"><div class="stat-label">Sample revenue</div><div class="stat-val" style="color:#c4a572">€'+totSampleR.toFixed(0)+'</div></div>':'')+'<div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">€'+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">€'+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Revenue</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500">'+r.brand+'</td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+r.status+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
 function exportReport(format){const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);let filtered=filterClientsByStatus(clients, sf);const rows=[];filtered.forEach(c=>{const invs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0),factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0),profit=invs.reduce((a,inv)=>a+(inv.profit||0),0),paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);rows.push({Brand:c.brand,Country:c.country||'',Status:c.status,Currency:c.currency||'EUR',Invoices:invs.length,Revenue:revenue.toFixed(2),FactoryCost:factory.toFixed(2),Profit:profit.toFixed(2),Paid:paid.toFixed(2),Outstanding:(revenue-paid).toFixed(2)});});if(!rows.length){showToast('No data to export');return;}if(format==='csv'){const headers=Object.keys(rows[0]);const csv=[headers.join(','),...rows.map(r=>headers.map(h=>'"'+(r[h]||'')+'"').join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.csv';a.click();URL.revokeObjectURL(url);showToast('CSV exported ✓');}else{const headers=Object.keys(rows[0]);const content='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>The Apparel Co Report</title><style>body{font-family:sans-serif;padding:32px;color:#111}h1{font-family:serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 6px;border-bottom:1px solid #eee}tfoot td{font-weight:600;border-top:2px solid #ddd;padding-top:12px}</style></head><body><h1>The Apparel Co — Report</h1><p>Period: '+(from||'All time')+' to '+(to||today())+' · Filter: '+sf+'</p><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+headers.map(h=>'<td>'+(r[h]||'')+'</td>').join('')+'</tr>').join('')+'</tbody><tfoot><tr><td colspan="5">TOTAL</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Revenue),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.FactoryCost),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Profit),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Paid),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Outstanding),0).toFixed(2)+'</td></tr></tfoot></table></body></html>';const blob=new Blob([content],{type:'text/html'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.html';a.click();URL.revokeObjectURL(url);showToast('Report exported — open file and Print → Save as PDF ✓');}}
 
 
@@ -1849,7 +1973,7 @@ function renderQuoteDoc(clientId, idx) {
 
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
     '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
-    '<div style="text-align:right"><div class="inv-number">QUOTE</div><div class="inv-meta"><strong>'+q.number+'</strong><br>'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div>' +
+    '<div style="text-align:right">' + (q.isSample ? '<div style="display:inline-block;padding:3px 10px;background:#c4a572;color:#fff;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.1em;margin-bottom:6px">SAMPLE QUOTE</div>' : '') + '<div class="inv-number">QUOTE</div><div class="inv-meta"><strong>'+q.number+'</strong><br>'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div>' +
     '</div>' +
     '<hr class="inv-hr">' +
     '<div style="margin-bottom:18px"><div class="inv-bill-label">Prepared for</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div>' +
@@ -1860,12 +1984,14 @@ function renderQuoteDoc(clientId, idx) {
     q.styles.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('') +
     (q.ivaAmt?'<tr><td>IVA ('+q.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+q.ivaAmt.toFixed(2)+'</td></tr>':'') +
     (q.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+q.ship.toFixed(2)+'</td></tr>':'') +
+    (q.isSample && q.protoFee ? '<tr><td><strong>Prototype Development Fee</strong><div style="font-size:10px;color:#888;font-style:italic">Refundable on bulk production within 60 days of approval</div></td><td></td><td></td><td style="text-align:right">'+s+q.protoFee.toFixed(2)+'</td></tr>' : '') +
     q.samples.map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('') +
     '</tbody></table>' +
     '<hr class="inv-hr">' +
     '<div style="max-width:240px;margin-left:auto">' +
     '<div class="inv-total-line grand"><span>Total estimate</span><span>'+s+q.totalClient.toFixed(2)+'</span></div>' +
     '</div>' +
+    (q.isSample && q.protoFee ? '<div style="margin:14px 0 8px;padding:8px;background:#fff8eb;border-left:3px solid #c4a572;font-size:11px;color:#666"><strong>Prototype Development Fee Refund:</strong> The €'+q.protoFee.toFixed(2)+' Prototype Development Fee is refundable if the client confirms bulk production within 60 days of sample approval. The fee will be credited against the bulk production deposit invoice.</div>' : '') +
     '<div class="inv-footer"><strong>This is a quote, not an invoice.</strong> Valid until '+fmtDate(q.validUntil)+'.<br>'+co.footer+'</div>';
 
   return buildDocHtml('Quote ' + q.number, inner);
@@ -1902,7 +2028,9 @@ function renderInvoiceDoc(clientId, idx) {
   
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
     '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
-    '<div style="text-align:right"><div class="inv-number">'+inv.number+'</div>' +
+    '<div style="text-align:right">' +
+    (inv.isSample ? '<div style="display:inline-block;padding:3px 10px;background:#c4a572;color:#fff;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.1em;margin-bottom:6px">SAMPLE INVOICE</div>' : '') +
+    '<div class="inv-number">'+inv.number+'</div>' +
     (typeLabel?'<div style="font-size:11px;color:#888;letter-spacing:0.08em;text-transform:uppercase;margin-top:2px">'+typeLabel.trim().replace(/[()]/g,'')+'</div>':'') +
     '<div class="inv-meta">'+fmtDate(inv.date)+'</div></div>' +
     '</div>' +
@@ -1915,6 +2043,7 @@ function renderInvoiceDoc(clientId, idx) {
     (inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('') +
     (inv.ivaAmt?'<tr><td>IVA ('+inv.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'') +
     (inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'') +
+    (inv.isSample && inv.protoFee ? '<tr><td><strong>Prototype Development Fee</strong><div style="font-size:10px;color:#888;font-style:italic">Refundable on bulk production within 60 days of approval</div></td><td></td><td></td><td style="text-align:right">'+s+inv.protoFee.toFixed(2)+'</td></tr>' : '') +
     (inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('') +
     '</tbody></table>' +
     '<hr class="inv-hr">' +
@@ -1926,7 +2055,9 @@ function renderInvoiceDoc(clientId, idx) {
     (totalPaid>0?'<div class="inv-total-line" style="color:#4a7"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div>':'') +
     (outstanding>0?'<div class="inv-total-line"><span>Outstanding</span><span>'+s+outstanding.toFixed(2)+'</span></div>':'') +
     '</div>' +
-    getBankingHtml() + '<div class="inv-footer">Payment terms: '+co.invTerms+'<br>'+co.footer+'</div>';
+    getBankingHtml() + '<div class="inv-footer">' +
+    (inv.isSample && inv.protoFee ? '<div style="margin-bottom:8px;padding:8px;background:#fff8eb;border-left:3px solid #c4a572;font-size:11px;color:#666"><strong>Prototype Development Fee Refund:</strong> The €'+inv.protoFee.toFixed(2)+' Prototype Development Fee is refundable if the client confirms bulk production within 60 days of sample approval. The fee will be credited against the bulk production deposit invoice.</div>' : '') +
+    'Payment terms: '+co.invTerms+'<br>'+co.footer+'</div>';
 
   return buildDocHtml('Invoice ' + inv.number, inner);
 }
@@ -2361,7 +2492,8 @@ function renderBenchmarksForm() {
 // Key milestone steps for metrics calculation
 const METRIC_STEPS = {
   techpack: 'Onboarding|Tech pack received',
-  depositPaid: 'Onboarding|Deposit payment confirmed',
+  samplePaid: 'Onboarding|Sample payment confirmed',
+  depositPaid: 'Bulk production|Deposit payment confirmed',
   factoryBriefed: 'Sampling|Factory briefed on sample',
   sampleReady: 'Sampling|Sample ready — photos sent to client',
   sampleApproved: 'Sampling|Sample approved by client',
@@ -2398,6 +2530,7 @@ function calcClientMetrics(clientId) {
   const get = key => getStepDate(clientId, METRIC_STEPS[key]);
   return {
     techpackToSample: daysBetween(get('techpack'), get('sampleReady')),
+    samplePaymentToSample: daysBetween(get('samplePaid'), get('sampleReady')),
     sampleTurnaround: daysBetween(get('factoryBriefed'), get('sampleReady')),
     sampleToApproval: daysBetween(get('sampleReady'), get('sampleApproved')),
     approvalToBulk: daysBetween(get('sampleApproved'), get('bulkStarted')),
@@ -3200,33 +3333,63 @@ function resolveConfirm(answer) {
 // ════════════════════════════════════════════════════════
 // SEQUENTIAL NUMBER COUNTERS
 // ════════════════════════════════════════════════════════
-function getNextInvoiceNumber() {
+function getNextInvoiceNumber(isSample) {
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
-  const current = parseInt(lsGet('tac_inv_counter', '0')) || 0;
+  const key = isSample ? 'tac_sample_inv_counter' : 'tac_inv_counter';
+  const current = parseInt(lsGet(key, '0')) || 0;
   const next = current + 1;
-  lsSet('tac_inv_counter', String(next));
-  return prefix + '-' + String(next).padStart(3, '0');
+  lsSet(key, String(next));
+  const suffix = String(next).padStart(3, '0');
+  return isSample ? prefix + '-S-' + suffix : prefix + '-' + suffix;
 }
 
-function getNextQuoteNumber() {
-  const current = parseInt(lsGet('tac_quote_counter', '0')) || 0;
+function getNextQuoteNumber(isSample) {
+  const key = isSample ? 'tac_sample_quote_counter' : 'tac_quote_counter';
+  const current = parseInt(lsGet(key, '0')) || 0;
   const next = current + 1;
-  lsSet('tac_quote_counter', String(next));
-  return 'Q-' + String(next).padStart(3, '0');
+  lsSet(key, String(next));
+  const suffix = String(next).padStart(3, '0');
+  return isSample ? 'Q-S-' + suffix : 'Q-' + suffix;
 }
 
 // Peek at next number without incrementing (for display)
-function peekNextInvoiceNumber() {
+function peekNextInvoiceNumber(isSample) {
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
-  const current = parseInt(lsGet('tac_inv_counter', '0')) || 0;
-  return prefix + '-' + String(current + 1).padStart(3, '0');
+  const key = isSample ? 'tac_sample_inv_counter' : 'tac_inv_counter';
+  const current = parseInt(lsGet(key, '0')) || 0;
+  const suffix = String(current + 1).padStart(3, '0');
+  return isSample ? prefix + '-S-' + suffix : prefix + '-' + suffix;
 }
 
-function peekNextQuoteNumber() {
-  const current = parseInt(lsGet('tac_quote_counter', '0')) || 0;
-  return 'Q-' + String(current + 1).padStart(3, '0');
+function peekNextQuoteNumber(isSample) {
+  const key = isSample ? 'tac_sample_quote_counter' : 'tac_quote_counter';
+  const current = parseInt(lsGet(key, '0')) || 0;
+  const suffix = String(current + 1).padStart(3, '0');
+  return isSample ? 'Q-S-' + suffix : 'Q-' + suffix;
+}
+
+
+// SAMPLE QUOTE/INVOICE TOGGLE
+function toggleQuoteType() {
+  const isSample = document.getElementById('q-issample')?.value === '1';
+  const wrap = document.getElementById('q-protofee-wrap');
+  const numInput = document.getElementById('q-num');
+  if (wrap) wrap.style.display = isSample ? 'block' : 'none';
+  if (numInput) numInput.value = peekNextQuoteNumber(isSample);
+  updateQuotePreview();
+}
+function toggleInvoiceTypeSample() {
+  const isSample = document.getElementById('i-issample')?.value === '1';
+  const wrap = document.getElementById('i-protofee-wrap');
+  const numInput = document.getElementById('i-num');
+  if (wrap) wrap.style.display = isSample ? 'block' : 'none';
+  if (numInput) numInput.value = peekNextInvoiceNumber(isSample);
+  // Hide payment type selector for samples (always full payment)
+  const ptype = document.getElementById('i-invtype')?.closest('.field');
+  if (ptype) ptype.style.display = isSample ? 'none' : 'block';
+  buildInvoice();
 }
 
 // KEYBOARD & START
