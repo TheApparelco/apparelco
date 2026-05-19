@@ -2247,7 +2247,9 @@ async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   const c = clients.find(x => String(x.id) === String(clientId));
   const q = getClientQuotes(clientId)[idx];
   if (!q) return;
-  const invType = passedType || getSelectedInvoiceType();
+  const isSample = !!q.isSample;
+  // Sample invoices are always full payment (no 50/50 split)
+  const invType = isSample ? 'full' : (passedType || getSelectedInvoiceType());
   const co = getCompanyInfo();
   const fullTotal = q.totalClient;
   let amountDue = fullTotal;
@@ -2256,7 +2258,7 @@ async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   else if (invType === 'balance') { amountDue = fullTotal / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
-    number: getNextInvoiceNumber(),
+    number: getNextInvoiceNumber(isSample),
     date: today(),
     cur: q.cur || c?.currency || 'EUR',
     styles: q.styles, samples: q.samples,
@@ -2266,6 +2268,10 @@ async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
     amountDue: amountDue,
     invType: invType,
     typeLabel: typeLabel,
+    isSample: isSample,
+    protoFee: q.protoFee || 0,
+    sampleCommPct: q.sampleCommPct || 0,
+    sampleCommAmt: q.sampleCommAmt || 0,
     totalFactory: q.totalFactory, profit: q.profit,
     amountPaid: 0, payments: [], fromQuote: q.number
   };
@@ -2309,13 +2315,25 @@ async function combineQuotesIntoInvoice(clientId) {
   const totalFactory = combinedStyles.reduce((a, g) => a + g.fp * g.units, 0) + combinedSamples.reduce((a, x) => a + x.fp, 0);
   
   const co = getCompanyInfo();
+  // If ALL selected quotes are sample quotes, create a sample invoice
+  const allSample = selectedQuotes.every(q => q.isSample);
+  const anySample = selectedQuotes.some(q => q.isSample);
+  // Warn if mixing sample + production
+  if (anySample && !allSample) {
+    showToast('Cannot mix sample and production quotes in one invoice');
+    return;
+  }
+  const isSample = allSample;
+  // Combine sample-specific values
+  const totalProtoFee = selectedQuotes.reduce((a, q) => a + (q.protoFee || 0), 0);
+  const finalInvType = isSample ? 'full' : invType;
   let amountDue = totalClient;
   let typeLabel = '';
-  if (invType === 'deposit') { amountDue = totalClient / 2; typeLabel = ' (50% Deposit)'; }
-  else if (invType === 'balance') { amountDue = totalClient / 2; typeLabel = ' (50% Balance)'; }
+  if (finalInvType === 'deposit') { amountDue = totalClient / 2; typeLabel = ' (50% Deposit)'; }
+  else if (finalInvType === 'balance') { amountDue = totalClient / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
-    number: getNextInvoiceNumber(),
+    number: getNextInvoiceNumber(isSample),
     date: today(),
     cur: selectedQuotes[0].cur || c.currency || 'EUR',
     styles: combinedStyles, samples: combinedSamples,
@@ -2323,8 +2341,12 @@ async function combineQuotesIntoInvoice(clientId) {
     stylesSub, ivaAmt, sampTotal,
     totalClient,
     amountDue: amountDue,
-    invType: invType,
+    invType: finalInvType,
     typeLabel: typeLabel,
+    isSample: isSample,
+    protoFee: totalProtoFee,
+    sampleCommPct: isSample ? (selectedQuotes[0].sampleCommPct || 0) : 0,
+    sampleCommAmt: isSample ? selectedQuotes.reduce((a, q) => a + (q.sampleCommAmt || 0), 0) : 0,
     totalFactory, profit: totalClient - totalFactory,
     amountPaid: 0, payments: [],
     fromQuotes: selectedQuotes.map(q => q.number).join(', ')
@@ -2436,6 +2458,7 @@ function filterClientsByStatus(arr, filter) {
 // BENCHMARK SETTINGS
 const DEFAULT_BENCHMARKS = {
   techpackToSample:        { fast: 14, slow: 28,  label: 'Tech pack → Sample ready' },
+  samplePaymentToSample:   { fast: 10, slow: 21,  label: 'Sample payment → Sample ready' },
   sampleTurnaround:        { fast: 10, slow: 21,  label: 'Factory briefed → Sample ready' },
   sampleToApproval:        { fast: 5,  slow: 14,  label: 'Sample ready → Approved' },
   approvalToBulk:          { fast: 7,  slow: 14,  label: 'Sample approved → Bulk started' },
@@ -3238,6 +3261,16 @@ async function restoreFromBackup(file) {
         const current = parseInt(lsGet('tac_quote_counter','0'))||0;
         const saved = parseInt(data.quoteCounter)||0;
         lsSet('tac_quote_counter', String(Math.max(current, saved)));
+      }
+      if (data.sampleInvCounter) {
+        const current = parseInt(lsGet('tac_sample_inv_counter','0'))||0;
+        const saved = parseInt(data.sampleInvCounter)||0;
+        lsSet('tac_sample_inv_counter', String(Math.max(current, saved)));
+      }
+      if (data.sampleQuoteCounter) {
+        const current = parseInt(lsGet('tac_sample_quote_counter','0'))||0;
+        const saved = parseInt(data.sampleQuoteCounter)||0;
+        lsSet('tac_sample_quote_counter', String(Math.max(current, saved)));
       }
       
       // Sync to Drive if connected
