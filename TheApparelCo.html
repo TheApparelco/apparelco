@@ -1075,6 +1075,8 @@ function downloadBackup(){
     invoices: {},
     stepfiles: {},
     company: lsGet('tac_company', {}),
+    invCounter: lsGet('tac_inv_counter', '0'),
+    quoteCounter: lsGet('tac_quote_counter', '0'),
     benchmarks: lsGet('tac_benchmarks', null),
     logo: lsGet('tac_logo', null),
     logoSize: lsGet('tac_logo_size', 'm'),
@@ -1494,7 +1496,7 @@ function closeSlideshow(){document.getElementById('slideshow').classList.remove(
 
 // QUOTES
 let activeQuoteClientId=null,qStyleIdx=0,qSampleIdx=0;
-function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value="Q-'+Date.now().toString().slice(-4)+'"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
+function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value=\"'+peekNextQuoteNumber()+'\"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
 function addQuoteStyle(dc){qStyleIdx++;const wrap=document.getElementById('q-styles-wrap');const div=document.createElement('div');div.className='style-block';div.id='qs-'+qStyleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qs-'+qStyleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Style '+qStyleIdx+'</div><div class="grid2" style="margin-bottom:8px"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. hoodie — black" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Size range</label><input placeholder="e.g. XS-XL" oninput="updateQuotePreview()"></div></div><div class="grid3"><div class="field" style="margin:0"><label>Units</label><input type="number" value="300" min="1" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price/unit (€)</label><input type="number" value="18.00" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="'+(dc||20)+'" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function addQuoteSample(){qSampleIdx++;const wrap=document.getElementById('q-samples-wrap');const div=document.createElement('div');div.className='style-block';div.id='qsamp-'+qSampleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qsamp-'+qSampleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Sample '+qSampleIdx+'</div><div class="grid3"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. size M" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price (€)</label><input type="number" value="45" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="100" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function getQuoteStyles(){return Array.from(document.querySelectorAll('.style-block[id^="qs-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Style',sizes=inp[1].value||'',units=parseInt(inp[2].value)||0,fp=parseFloat(inp[3].value)||0,co=parseFloat(inp[4].value)||0,ppu=fp*(1+co/100);return{desc,sizes,units,fp,co,ppu,subtotal:ppu*units};});}
@@ -1505,7 +1507,7 @@ async function saveNewQuote(){
   if (!ok) return;
   const styles=getQuoteStyles(),samples=getQuoteSamples(),iva=parseNum(document.getElementById('q-iva').value, 23),ship=parseNum(document.getElementById('q-ship').value, 0),cur=document.getElementById('q-cur').value;
   const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);
-  const quote={id:Date.now(),number:document.getElementById('q-num').value,date:document.getElementById('q-date').value,validUntil:document.getElementById('q-valid').value,cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};
+  const quote={id:Date.now(),number:document.getElementById('q-num').value || getNextQuoteNumber(),date:document.getElementById('q-date').value,validUntil:document.getElementById('q-valid').value,cur,iva,ship,styles,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};
   const clientId = activeQuoteClientId;
   const quotes=getClientQuotes(clientId);quotes.unshift(quote);saveClientQuotes(clientId,quotes);
   closeModal('quote-modal');
@@ -1540,9 +1542,10 @@ async function saveInvoiceToClient(){
   const typeLabel = invType==='deposit'?' (50% Deposit)':invType==='balance'?' (50% Balance)':'';
   const ok = await themedConfirm('Save invoice?','Save this invoice to the client record?','Save invoice','🧾');
   if(!ok) return;
+  const invNum = getNextInvoiceNumber();
   const inv={
     id:Date.now(),
-    number:document.getElementById('i-num').value,
+    number:invNum,
     date:document.getElementById('i-date').value,
     cur:document.getElementById('i-cur').value,
     styles:d.garments||[],
@@ -1573,7 +1576,7 @@ function getGarments(){return Array.from(document.querySelectorAll('.style-block
 function getSamples(){return Array.from(document.querySelectorAll('.style-block[id^="sb-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Sample',fp=parseFloat(inp[1].value)||0,co=parseFloat(inp[2].value)||100;return{desc,fp,co,total:fp*(1+co/100)};});}
 function calcPrice(){const iva=parseNum(document.getElementById('p-iva').value, 0),fx=parseNum(document.getElementById('p-fx').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value,s=sym(cur);const garments=getGarments(),samples=getSamples();const garmentSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=garmentSub*(iva/100),fxAmt=garmentSub*(fx/100),prodTotal=garmentSub+ivaAmt+fxAmt+ship,sampTotal=samples.reduce((a,x)=>a+x.total,0),grand=prodTotal+sampTotal,factoryTotal=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0),profit=grand-factoryTotal;document.getElementById('breakdown').innerHTML=(garments.length?garments.map(g=>'<div class="price-row" style="flex-direction:column;align-items:flex-start;gap:1px;padding-bottom:10px"><div style="display:flex;justify-content:space-between;width:100%;font-weight:500">'+g.desc+(g.sizes?' <span style="color:var(--text3);font-size:12px;font-weight:300">('+g.sizes+')</span>':'')+'<span style="color:var(--accent)">'+s+g.subtotal.toFixed(2)+'</span></div><div style="color:var(--text3);font-size:12px">'+g.units+' × '+s+g.ppu.toFixed(2)+'/unit · factory '+s+g.fp.toFixed(2)+' + '+g.co+'% commission</div></div>').join(''):'<div class="price-row" style="color:var(--text3)">No styles added</div>')+'<div class="price-row"><span style="color:var(--text3)">Subtotal</span><span>'+s+garmentSub.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">IVA ('+iva+'%)</span><span>+'+s+ivaAmt.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">FX fee ('+fx+'%)</span><span>+'+s+fxAmt.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--text3)">Shipping</span><span>+'+s+ship.toFixed(2)+'</span></div>'+samples.map(x=>'<div class="price-row"><span style="color:var(--text3)">'+x.desc+' (+'+x.co+'% comm)</span><span>+'+s+x.total.toFixed(2)+'</span></div>').join('')+'<div class="price-row grand"><span>Grand total</span><span>'+s+grand.toFixed(2)+'</span></div><div class="price-row"><span style="color:var(--green)">Your profit</span><span style="color:var(--green)">'+s+profit.toFixed(2)+'</span></div>';document.getElementById('s-prod').textContent=s+prodTotal.toFixed(2);document.getElementById('s-samp').textContent=s+sampTotal.toFixed(2);document.getElementById('s-grand').textContent=s+grand.toFixed(2);invoicePayload={garments,iva,fx,ship,garmentSub,ivaAmt,fxAmt,prodTotal,samples,sampTotal,grand,cur,factoryTotal,profit};}
 function pushToInvoice(){const cid=document.getElementById('p-client').value;const c=clients.find(x=>String(x.id)===String(cid));if(c){document.getElementById('i-client').value=c.brand;document.getElementById('i-cur').value=invoicePayload.cur||'EUR';}document.getElementById('i-date').value=today();showPanel('invoice');buildInvoice();}
-async function saveAsQuote(){const cid=document.getElementById('p-client').value;if(!cid){showToast('Select a client first');return;}const _ok=await themedConfirm('Save quote?','Save the current pricing as a quote for this client.','Save quote','📄');if(!_ok)return;activeQuoteClientId=cid;const garments=getGarments(),samples=getSamples(),iva=parseNum(document.getElementById('p-iva').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value;const stylesSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:'Q-'+Date.now().toString().slice(-4),date:today(),validUntil:new Date(Date.now()+14*86400000).toISOString().split('T')[0],cur,iva,ship,styles:garments,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(cid);quotes.unshift(quote);saveClientQuotes(cid,quotes);showToast('Quote saved to client ✓');showPanel('client',cid);setTimeout(()=>{const qTab=document.querySelector('[onclick*="ct-quotes"]');if(qTab)qTab.click();},300);}
+async function saveAsQuote(){const cid=document.getElementById('p-client').value;if(!cid){showToast('Select a client first');return;}const _ok=await themedConfirm('Save quote?','Save the current pricing as a quote for this client.','Save quote','📄');if(!_ok)return;activeQuoteClientId=cid;const garments=getGarments(),samples=getSamples(),iva=parseNum(document.getElementById('p-iva').value, 0),ship=parseNum(document.getElementById('p-ship').value, 0),cur=document.getElementById('p-cur').value;const stylesSub=garments.reduce((a,g)=>a+g.subtotal,0),ivaAmt=stylesSub*(iva/100),sampTotal=samples.reduce((a,x)=>a+x.total,0),totalClient=stylesSub+ivaAmt+ship+sampTotal,totalFactory=garments.reduce((a,g)=>a+g.fp*g.units,0)+samples.reduce((a,x)=>a+x.fp,0);const quote={id:Date.now(),number:getNextQuoteNumber(),date:today(),validUntil:new Date(Date.now()+14*86400000).toISOString().split('T')[0],cur,iva,ship,styles:garments,samples,stylesSub,ivaAmt,sampTotal,totalClient,totalFactory,profit:totalClient-totalFactory,status:'pending'};const quotes=getClientQuotes(cid);quotes.unshift(quote);saveClientQuotes(cid,quotes);showToast('Quote saved to client ✓');showPanel('client',cid);setTimeout(()=>{const qTab=document.querySelector('[onclick*="ct-quotes"]');if(qTab)qTab.click();},300);}
 
 // INVOICE PANEL
 function buildInvoiceTotals(s, grand) {
@@ -1948,8 +1951,7 @@ function createInvoiceFromQuote(clientId, quoteIdx) {
   if (!q) return;
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
-  const invNum = prefix + '-' + Date.now().toString().slice(-5);
-  const inv = {
+  const invNum = getNextInvoiceNumber();  const inv = {
     id: Date.now(), number: invNum, date: today(), cur: q.cur||c?.currency||'EUR',
     styles: q.styles, samples: q.samples, iva: q.iva, ship: q.ship,
     stylesSub: q.stylesSub, ivaAmt: q.ivaAmt, sampTotal: q.sampTotal,
@@ -2094,7 +2096,6 @@ async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   if (!q) return;
   const invType = passedType || getSelectedInvoiceType();
   const co = getCompanyInfo();
-  const prefix = co.invPrefix || 'TAC';
   const fullTotal = q.totalClient;
   let amountDue = fullTotal;
   let typeLabel = '';
@@ -2102,7 +2103,7 @@ async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   else if (invType === 'balance') { amountDue = fullTotal / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
-    number: prefix + '-' + Date.now().toString().slice(-5),
+    number: getNextInvoiceNumber(),
     date: today(),
     cur: q.cur || c?.currency || 'EUR',
     styles: q.styles, samples: q.samples,
@@ -2155,14 +2156,13 @@ async function combineQuotesIntoInvoice(clientId) {
   const totalFactory = combinedStyles.reduce((a, g) => a + g.fp * g.units, 0) + combinedSamples.reduce((a, x) => a + x.fp, 0);
   
   const co = getCompanyInfo();
-  const prefix = co.invPrefix || 'TAC';
   let amountDue = totalClient;
   let typeLabel = '';
   if (invType === 'deposit') { amountDue = totalClient / 2; typeLabel = ' (50% Deposit)'; }
   else if (invType === 'balance') { amountDue = totalClient / 2; typeLabel = ' (50% Balance)'; }
   const inv = {
     id: Date.now(),
-    number: prefix + '-' + Date.now().toString().slice(-5),
+    number: getNextInvoiceNumber(),
     date: today(),
     cur: selectedQuotes[0].cur || c.currency || 'EUR',
     styles: combinedStyles, samples: combinedSamples,
@@ -3073,6 +3073,17 @@ async function restoreFromBackup(file) {
       if (data.logo) lsSet('tac_logo', data.logo);
       if (data.logoSize) lsSet('tac_logo_size', data.logoSize);
       if (data.theme) lsSet('tac_theme', data.theme);
+      // Restore counters — take the HIGHER value to prevent going backwards
+      if (data.invCounter) {
+        const current = parseInt(lsGet('tac_inv_counter','0'))||0;
+        const saved = parseInt(data.invCounter)||0;
+        lsSet('tac_inv_counter', String(Math.max(current, saved)));
+      }
+      if (data.quoteCounter) {
+        const current = parseInt(lsGet('tac_quote_counter','0'))||0;
+        const saved = parseInt(data.quoteCounter)||0;
+        lsSet('tac_quote_counter', String(Math.max(current, saved)));
+      }
       
       // Sync to Drive if connected
       if (driveConnected) {
@@ -3138,14 +3149,13 @@ function updateTaxLabel() {
 function loadInvoiceDefaults() {
   const co = getCompanyInfo();
   const prefix = co.invPrefix || 'TAC';
-  const nextNum = prefix + '-' + String(Date.now()).slice(-4);
 
   // Invoice panel
   const iNum = document.getElementById('i-num');
   const iDue = document.getElementById('i-due');
   const iTerms = document.getElementById('i-terms');
   const iDate = document.getElementById('i-date');
-  if (iNum && !iNum.value) iNum.value = nextNum;
+  if (iNum) iNum.value = peekNextInvoiceNumber();
   if (iDue) iDue.value = co.invDue || '14';
   if (iTerms) iTerms.value = co.invTerms || '50% deposit · 50% before dispatch';
   if (iDate && !iDate.value) iDate.value = today();
@@ -3184,6 +3194,39 @@ function resolveConfirm(answer) {
   if (_alertResolve) { _alertResolve(); _alertResolve = null; }
   document.getElementById('confirm-modal').classList.remove('open');
   if (_confirmResolve) { _confirmResolve(answer); _confirmResolve = null; }
+}
+
+
+// ════════════════════════════════════════════════════════
+// SEQUENTIAL NUMBER COUNTERS
+// ════════════════════════════════════════════════════════
+function getNextInvoiceNumber() {
+  const co = getCompanyInfo();
+  const prefix = co.invPrefix || 'TAC';
+  const current = parseInt(lsGet('tac_inv_counter', '0')) || 0;
+  const next = current + 1;
+  lsSet('tac_inv_counter', String(next));
+  return prefix + '-' + String(next).padStart(3, '0');
+}
+
+function getNextQuoteNumber() {
+  const current = parseInt(lsGet('tac_quote_counter', '0')) || 0;
+  const next = current + 1;
+  lsSet('tac_quote_counter', String(next));
+  return 'Q-' + String(next).padStart(3, '0');
+}
+
+// Peek at next number without incrementing (for display)
+function peekNextInvoiceNumber() {
+  const co = getCompanyInfo();
+  const prefix = co.invPrefix || 'TAC';
+  const current = parseInt(lsGet('tac_inv_counter', '0')) || 0;
+  return prefix + '-' + String(current + 1).padStart(3, '0');
+}
+
+function peekNextQuoteNumber() {
+  const current = parseInt(lsGet('tac_quote_counter', '0')) || 0;
+  return 'Q-' + String(current + 1).padStart(3, '0');
 }
 
 // KEYBOARD & START
