@@ -1341,7 +1341,7 @@ function switchTab(btn,tabId){const container=btn.closest('#client-content');con
 // WORKFLOW
 const PHASES=[
   {name:'Onboarding',items:[
-    {label:'Tech pack received',upload:true},
+    {label:'Tech pack / Sample received',upload:true,hasDropdown:true},
     {label:'Quote sent to client',upload:false},
     {label:'Sample quote sent to client',upload:false},
     {label:'Sample invoice sent',upload:false},
@@ -1391,12 +1391,29 @@ function renderWorkflow(clientId,checks,quotes){
         (isQuoteStep && sentQuotes.length ? '<span style="font-size:11px;color:var(--green);margin-left:6px">'+sentQuotes.length+' quote'+(sentQuotes.length>1?'s':'')+'</span>' : '') +
         (item.upload ? '<button class="btn btn-xs btn-ghost" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" onclick="handleStepUpload(this)">📎'+(files.length?' '+files.length:'')+'</button>' : '') +
         '</div>' +
+        (item.hasDropdown ? (function(){
+          const dropdownVal = lsGet('stepdropdown_'+clientId+'_'+k, 'techpack');
+          return '<div style="margin:6px 0 8px 26px"><select class="step-dropdown" data-cid="'+esc(clientId)+'" data-key="'+esc(k)+'" onchange="handleStepDropdown(this)" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--surface2);color:var(--text);border:0.5px solid var(--border2);max-width:220px">' +
+            '<option value="techpack"'+(dropdownVal==='techpack'?' selected':'')+'>📦 Tech pack received</option>' +
+            '<option value="sample"'+(dropdownVal==='sample'?' selected':'')+'>🧵 Sample received (to recreate)</option>' +
+            '<option value="both"'+(dropdownVal==='both'?' selected':'')+'>📦+🧵 Both received</option>' +
+          '</select></div>';
+        })() : '') +
         (files.length ? '<div class="step-files">'+files.map((f,fi)=>'<div class="file-chip"><span>'+fileIcon(f.name)+'</span><span class="file-chip-name">'+esc(f.name)+'</span><span class="file-chip-del" data-cid="'+esc(clientId)+'" data-phase="'+pi+'" data-item="'+ii+'" data-fi="'+fi+'" onclick="handleDelStepFile(this)">✕</span></div>').join('')+'</div>' : '') +
         '</div>';
     }).join('') + '</div></div>').join('');
 }
 
 // Click handlers that read data attributes (no string escaping issues)
+
+// Handle dropdown change for step items
+function handleStepDropdown(el) {
+  const cid = el.dataset.cid;
+  const key = el.dataset.key;
+  const val = el.value;
+  lsSet('stepdropdown_'+cid+'_'+key, val);
+}
+
 function getStepKeyFromEl(el) {
   const cid = el.dataset.cid;
   const pi = parseInt(el.dataset.phase);
@@ -1515,7 +1532,26 @@ function resolveDatePrompt(useDate) {
 }
 let activeStepClient=null,activeStepKey=null;
 function triggerStepUpload(clientId,stepKey){activeStepClient=clientId;activeStepKey=stepKey;document.getElementById('step-input').click();}
-async function handleStepFiles(e){const files=Array.from(e.target.files);const stepFiles=lsGet('stepfiles_'+activeStepClient,{});if(!stepFiles[activeStepKey])stepFiles[activeStepKey]=[];for(const f of files){const du=await readAsDataUrl(f);const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');stepFiles[activeStepKey].push({name:nm,size:f.size,data:du});if(driveConnected){try{await driveUploadBinary('stepfile_'+activeStepClient+'_'+Date.now()+'_'+nm,du);}catch{}}}lsSet('stepfiles_'+activeStepClient,stepFiles);e.target.value='';renderClientDetail(activeStepClient);}
+async function handleStepFiles(e){
+  const files=Array.from(e.target.files);
+  const stepFiles=lsGet('stepfiles_'+activeStepClient,{});
+  if(!stepFiles[activeStepKey])stepFiles[activeStepKey]=[];
+  for(const f of files){
+    const du=await readAsDataUrl(f);
+    const nm=f.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+    stepFiles[activeStepKey].push({name:nm,size:f.size,data:du});
+    if(driveConnected){try{await driveUploadBinary('stepfile_'+activeStepClient+'_'+Date.now()+'_'+nm,du);}catch{}}
+  }
+  lsSet('stepfiles_'+activeStepClient,stepFiles);
+  e.target.value='';
+  // Re-render workflow tab in place (no full re-render, no tab switch)
+  const workflowContent = document.getElementById('ct-workflow');
+  if (workflowContent) {
+    const checks = lsGet('checks_'+activeStepClient, {});
+    const quotes = getClientQuotes(activeStepClient);
+    workflowContent.innerHTML = renderWorkflow(activeStepClient, checks, quotes);
+  }
+}
 async function delStepFile(clientId,stepKey,idx){const _ok=await themedConfirm('Remove file?','Remove this attachment?','Remove','🗑️');if(!_ok)return;const sf=lsGet('stepfiles_'+clientId,{});if(sf[stepKey]){sf[stepKey].splice(idx,1);lsSet('stepfiles_'+clientId,sf);}renderClientDetail(clientId);}
 
 // PHOTOS & DOCS
@@ -2536,7 +2572,7 @@ function renderBenchmarksForm() {
 
 // Key milestone steps for metrics calculation
 const METRIC_STEPS = {
-  techpack: 'Onboarding|Tech pack received',
+  techpack: 'Onboarding|Tech pack / Sample received',
   samplePaid: 'Onboarding|Sample payment confirmed',
   depositPaid: 'Bulk production|Deposit payment confirmed',
   factoryBriefed: 'Sampling|Factory briefed on sample',
