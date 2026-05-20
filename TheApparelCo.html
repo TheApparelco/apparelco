@@ -1119,7 +1119,53 @@ function downloadBackup(){
 function checkDailyBackup(){const last=localStorage.getItem('last_backup_date');if(last!==new Date().toDateString()&&clients.length>0){setTimeout(()=>showToast('Daily backup ready — click ⬇ Backup',6000),5000);}}
 
 // INIT
-async function showApp(){document.getElementById('connect-screen').style.display='none';document.getElementById('app').style.display='grid';setSyncStatus(driveConnected?'syncing':'local');if(driveConnected){try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}catch{await loadAllClients();setSyncStatus('offline');}}else{await loadAllClients();setSyncStatus('local');}clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});renderSidebarClients();renderDashboard();populatePriceClients();document.getElementById('i-date').value=today();const from=new Date();from.setMonth(from.getMonth()-3);document.getElementById('rep-from').value=from.toISOString().split('T')[0];document.getElementById('rep-to').value=today();if(document.getElementById('tax-from')){document.getElementById('tax-from').value=from.toISOString().split('T')[0];document.getElementById('tax-to').value=today();}buildInvoice();addGarment();calcPrice();checkDailyBackup();loadLogo();loadCompanyInfo();Object.assign(BENCHMARKS, loadBenchmarks());startTokenWatcher();loadInvoiceDefaults();}
+async function showApp(){
+  document.getElementById('connect-screen').style.display='none';
+  document.getElementById('app').style.display='grid';
+  setSyncStatus(driveConnected?'syncing':'local');
+  
+  // Load data
+  try {
+    if(driveConnected){
+      try{await buildFileIndex();await loadAllClients();await flushSyncQueue();setSyncStatus('synced');}
+      catch{await loadAllClients();setSyncStatus('offline');}
+    } else {
+      await loadAllClients();setSyncStatus('local');
+    }
+    clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});
+  } catch(e) { console.error('Data load error:', e); }
+  
+  // Load settings BEFORE rendering anything that depends on them
+  try { loadCompanyInfo(); } catch(e) { console.error('loadCompanyInfo:', e); }
+  try { Object.assign(BENCHMARKS, loadBenchmarks()); } catch(e) { console.error('loadBenchmarks:', e); }
+  try { loadLogo(); } catch(e) { console.error('loadLogo:', e); }
+  
+  // Initialize the various input panels (must happen before any of them are interacted with)
+  try {
+    document.getElementById('i-date').value=today();
+    const from=new Date();from.setMonth(from.getMonth()-3);
+    document.getElementById('rep-from').value=from.toISOString().split('T')[0];
+    document.getElementById('rep-to').value=today();
+    if(document.getElementById('tax-from')){
+      document.getElementById('tax-from').value=from.toISOString().split('T')[0];
+      document.getElementById('tax-to').value=today();
+    }
+  } catch(e) { console.error('Date init:', e); }
+  
+  try { loadInvoiceDefaults(); } catch(e) { console.error('loadInvoiceDefaults:', e); }
+  try { buildInvoice(); } catch(e) { console.error('buildInvoice:', e); }
+  try { addGarment(); } catch(e) { console.error('addGarment:', e); }
+  try { calcPrice(); } catch(e) { console.error('calcPrice:', e); }
+  
+  // Render the main UI (must happen even if other things failed)
+  try { renderSidebarClients(); } catch(e) { console.error('renderSidebarClients:', e); }
+  try { populatePriceClients(); } catch(e) { console.error('populatePriceClients:', e); }
+  try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
+  
+  // Background tasks
+  try { checkDailyBackup(); } catch(e) {}
+  try { startTokenWatcher(); } catch(e) {}
+}
 
 // THEMES
 function setTheme(theme){
@@ -2699,11 +2745,15 @@ function refreshDashboardMetrics() {
 }
 
 function renderOverallMetrics(periodDays) {
-  const m = calcOverallMetrics(periodDays);
+  if (!clients || clients.length === 0) {
+    return '<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Add clients and tick workflow steps to start tracking turnaround times.</div>';
+  }
+  const m = calcOverallMetrics(periodDays) || {};
   const cards = Object.keys(BENCHMARKS).map(k => {
     const days = m[k];
-    const count = m[k + '_count'];
+    const count = m[k + '_count'] || 0;
     const b = BENCHMARKS[k];
+    if (!b) return '';
     const color = colorForMetric(k, days);
     const valDisplay = days != null ? days + 'd' : '—';
     return '<div class="stat" style="text-align:left;padding:14px">' +
