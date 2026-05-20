@@ -80,6 +80,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .detail-val{color:var(--text);flex:1;word-break:break-word}
 .avatar{width:44px;height:44px;border-radius:50%;background:var(--surface3);border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:16px;color:var(--accent);flex-shrink:0}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.stat-grid-3{grid-template-columns:repeat(3,1fr) !important}
+@media(max-width:640px){.stat-grid-3{grid-template-columns:repeat(2,1fr) !important}}
 .stat{background:var(--surface2);border-radius:var(--radius-sm);padding:12px;text-align:center}
 .stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
 .stat-val{font-size:18px;font-weight:500;color:var(--accent)}
@@ -353,6 +355,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="nav-item active" onclick="showPanel('dashboard')" id="nav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</div>
       <div class="nav-item" onclick="showPanel('pricing')" id="nav-pricing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pricing</div>
       
+      <div class="nav-item" onclick="showPanel('metrics')" id="nav-metrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Metrics</div>
       <div class="nav-item" onclick="showPanel('reports')" id="nav-reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports</div>
       <div class="nav-item" onclick="showPanel('workflow-report')" id="nav-workflow-report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Progress</div>
       <div class="nav-item" onclick="showPanel('settings')" id="nav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
@@ -458,6 +461,20 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       </div></div>
       <div class="doc-white" id="invoice-preview"></div>
     </div>
+    <div class="panel" id="panel-metrics">
+      <div class="panel-title">Business metrics</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em">Period</label>
+        <select id="metrics-panel-period" onchange="renderMetricsPanel()" style="font-size:13px;padding:6px 24px 6px 10px;background:var(--surface2);width:auto;border-radius:6px">
+          <option value="0">All time</option>
+          <option value="30">Last 30 days</option>
+          <option value="90" selected>Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+        </select>
+      </div>
+      <div id="metrics-panel-content"></div>
+    </div>
     <div class="panel" id="panel-reports">
       <div class="panel-title">Reports</div>
       <div class="tabs" style="margin-bottom:14px">
@@ -470,7 +487,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <div class="grid3" style="align-items:flex-end">
             <div class="field"><label>From date</label><input id="rep-from" type="date"></div>
             <div class="field"><label>To date</label><input id="rep-to" type="date"></div>
-            <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Has unpaid invoices</option><option value="paid">All invoices paid</option></select></div>
+            <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Has unpaid invoices</option><option value="overdue">Has overdue invoices</option><option value="paid">All invoices paid</option></select></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="generateReport()">Generate report</button>
@@ -697,6 +714,10 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <button class="btn btn-block" onclick="closeModal('more-sheet');showPanel('workflow-report')" style="justify-content:flex-start;padding:14px 16px;background:var(--surface2)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span style="margin-left:10px">Progress</span>
+      </button>
+      <button class="btn btn-block" onclick="closeModal('more-sheet');showPanel('metrics')" style="justify-content:flex-start;padding:14px 16px;background:var(--surface2)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span style="margin-left:10px">Metrics</span>
       </button>
       <button class="btn btn-block" onclick="closeModal('more-sheet');showPanel('settings')" style="justify-content:flex-start;padding:14px 16px;background:var(--surface2)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1205,31 +1226,44 @@ function fmtMoney(n,cur){return sym(cur||'EUR')+(n||0).toFixed(2);}
 function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 
 // PANELS
-function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}}
+function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}if(name==='metrics'){renderMetricsPanel();}}
 
 // DASHBOARD
 function renderDashboard(){
   const el=document.getElementById('dashboard-content');
   const filterVal = document.getElementById('dashboard-filter')?.value || 'all';
   const filtered = filterClientsByStatus(clients, filterVal);
-  if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0,totOutstanding=0;
+  if(!clients.length){el.innerHTML='<div class="panel-title">Overview</div><div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px;opacity:0.35">🧵</div><p>No clients yet. Click + next to Clients to add your first one.</p></div>';return;}const active=clients.filter(c=>c.status==='active').length,sampling=clients.filter(c=>c.status==='sample').length;let totR=0,totP=0,totOutstanding=0,totPipeline=0;
+// Build set of quote numbers that have already been turned into invoices
+const usedQuoteNumbers = new Set();
 clients.forEach(c=>{
   lsGet('invoices_'+c.id,[]).forEach(inv=>{
-    if (inv.isSample) return; // Skip sample invoices for production stats
+    if (inv.fromQuote) usedQuoteNumbers.add(inv.fromQuote);
+    if (inv.fromQuotes) inv.fromQuotes.split(',').forEach(qn => usedQuoteNumbers.add(qn.trim()));
+  });
+});
+clients.forEach(c=>{
+  // Invoices: revenue/profit/outstanding
+  lsGet('invoices_'+c.id,[]).forEach(inv=>{
+    if (inv.isSample) return; // Production stats exclude samples
     const paid = inv.amountPaid || 0;
     const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
     const fullTotal = inv.totalClient || 0;
     const fullProfit = inv.profit || 0;
-    // Revenue counts only what's actually been paid
     totR += paid;
-    // Outstanding = what's still owed on this invoice
     totOutstanding += Math.max(0, due - paid);
-    // Profit attributed proportionally to what's paid relative to the full order
     if (paid > 0 && fullTotal > 0) {
       totP += fullProfit * (paid / fullTotal);
     }
   });
-});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
+  // Pipeline: accepted quotes not yet invoiced (production only)
+  lsGet('quotes_'+c.id,[]).forEach(q=>{
+    if (q.isSample) return; // exclude sample quotes
+    if (q.status === 'accepted' && !usedQuoteNumbers.has(q.number)) {
+      totPipeline += (q.totalClient || 0);
+    }
+  });
+});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
@@ -2549,6 +2583,21 @@ function filterClientsByStatus(arr, filter) {
       return invs.every(inv => isInvoicePaid(inv));
     });
   }
+  if (filter === 'overdue') {
+    const now = Date.now();
+    return arr.filter(c => {
+      const invs = lsGet('invoices_'+c.id, []);
+      if (!invs.length) return false;
+      // Show clients with at least one overdue unpaid invoice
+      return invs.some(inv => {
+        if (isInvoicePaid(inv)) return false;
+        if (!inv.date) return false;
+        const dueDays = parseInt(inv.due) || 14;
+        const dueTime = new Date(inv.date).getTime() + dueDays * 86400000;
+        return now > dueTime;
+      });
+    });
+  }
   return arr;
 }
 
@@ -3585,6 +3634,223 @@ function toggleInvoiceTypeSample() {
   const ptype = document.getElementById('i-invtype')?.closest('.field');
   if (ptype) ptype.style.display = isSample ? 'none' : 'block';
   buildInvoice();
+}
+
+
+// ════════════════════════════════════════════════════════
+// BUSINESS METRICS PANEL — full analytics
+// ════════════════════════════════════════════════════════
+function calcBusinessMetrics(periodDays) {
+  const cutoff = periodDays ? Date.now() - periodDays * 86400000 : 0;
+  const inPeriod = d => !cutoff || (d && new Date(d).getTime() >= cutoff);
+  
+  let totalRevenue = 0, totalOutstanding = 0, totalProfit = 0;
+  let totalSampleRevenue = 0, totalSampleProfit = 0;
+  let invoicesPaidCount = 0, invoicesUnpaidCount = 0;
+  let overdueAmount = 0, overdueCount = 0;
+  let totalDaysToPayment = 0, daysToPaymentCount = 0;
+  let pipelineValue = 0, acceptedQuotesCount = 0;
+  let quotesSent = 0, quotesAccepted = 0;
+  let samplesCount = 0, samplesConverted = 0;
+  let allOrderValues = [];
+  let clientRevenue = {};
+  let repeatClients = 0, totalActiveClients = 0;
+  let nowMs = Date.now();
+  
+  // Build set of quote numbers used in invoices
+  const usedQuoteNumbers = new Set();
+  clients.forEach(c => {
+    lsGet('invoices_'+c.id, []).forEach(inv => {
+      if (inv.fromQuote) usedQuoteNumbers.add(inv.fromQuote);
+      if (inv.fromQuotes) inv.fromQuotes.split(',').forEach(qn => usedQuoteNumbers.add(qn.trim()));
+    });
+  });
+  
+  clients.forEach(c => {
+    const invs = lsGet('invoices_'+c.id, []);
+    const quotes = lsGet('quotes_'+c.id, []);
+    if (invs.length > 0 || quotes.length > 0) totalActiveClients++;
+    
+    let clientProdInvoices = 0;
+    let clientPaid = 0;
+    
+    invs.forEach(inv => {
+      const invDate = inv.date ? new Date(inv.date).getTime() : 0;
+      if (!inPeriod(inv.date)) return;
+      const paid = inv.amountPaid || 0;
+      const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
+      const fullTotal = inv.totalClient || 0;
+      const fullProfit = inv.profit || 0;
+      const isPaid = paid >= due && due > 0;
+      
+      if (inv.isSample) {
+        totalSampleRevenue += paid;
+        if (paid > 0 && fullTotal > 0) totalSampleProfit += fullProfit * (paid / fullTotal);
+      } else {
+        clientProdInvoices++;
+        totalRevenue += paid;
+        clientPaid += paid;
+        totalOutstanding += Math.max(0, due - paid);
+        if (paid > 0 && fullTotal > 0) totalProfit += fullProfit * (paid / fullTotal);
+        if (fullTotal > 0) allOrderValues.push(fullTotal);
+        
+        if (isPaid) {
+          invoicesPaidCount++;
+          // Days to payment (using last payment date vs invoice date)
+          const lastPayment = inv.payments && inv.payments.length 
+            ? inv.payments[inv.payments.length-1].date 
+            : null;
+          if (lastPayment && inv.date) {
+            const days = Math.round((new Date(lastPayment) - new Date(inv.date)) / 86400000);
+            if (days >= 0 && days < 365) {
+              totalDaysToPayment += days;
+              daysToPaymentCount++;
+            }
+          }
+        } else {
+          invoicesUnpaidCount++;
+          // Overdue check
+          if (inv.date) {
+            const dueDate = new Date(new Date(inv.date).getTime() + (parseInt(inv.due)||14) * 86400000);
+            if (nowMs > dueDate.getTime()) {
+              overdueAmount += Math.max(0, due - paid);
+              overdueCount++;
+            }
+          }
+        }
+      }
+    });
+    
+    if (clientPaid > 0) {
+      clientRevenue[c.brand || c.id] = (clientRevenue[c.brand || c.id] || 0) + clientPaid;
+    }
+    if (clientProdInvoices >= 2) repeatClients++;
+    
+    quotes.forEach(q => {
+      if (!inPeriod(q.date)) return;
+      if (q.isSample) {
+        samplesCount++;
+        // Sample → bulk conversion: did this client later get a non-sample accepted quote / invoice?
+        if (invs.some(inv => !inv.isSample && new Date(inv.date) > new Date(q.date))) {
+          samplesConverted++;
+        }
+      } else {
+        quotesSent++;
+        if (q.status === 'accepted') {
+          quotesAccepted++;
+          if (!usedQuoteNumbers.has(q.number)) {
+            pipelineValue += (q.totalClient || 0);
+            acceptedQuotesCount++;
+          }
+        }
+      }
+    });
+  });
+  
+  const avgOrderValue = allOrderValues.length ? allOrderValues.reduce((a,b)=>a+b,0) / allOrderValues.length : 0;
+  const avgDaysToPayment = daysToPaymentCount > 0 ? Math.round(totalDaysToPayment / daysToPaymentCount) : null;
+  const quoteAcceptanceRate = quotesSent > 0 ? Math.round((quotesAccepted / quotesSent) * 100) : null;
+  const sampleConversionRate = samplesCount > 0 ? Math.round((samplesConverted / samplesCount) * 100) : null;
+  const repeatRate = totalActiveClients > 0 ? Math.round((repeatClients / totalActiveClients) * 100) : null;
+  
+  // Top 3 clients by revenue
+  const top3 = Object.entries(clientRevenue).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const top3Share = totalRevenue > 0 ? Math.round((top3.reduce((a,b)=>a+b[1],0) / totalRevenue) * 100) : 0;
+  
+  // Status counts
+  let prospects = 0, inDevelopment = 0, inProduction = 0, completed = 0, onHold = 0;
+  clients.forEach(c => {
+    const s = c.status || 'active';
+    if (s === 'active') inProduction++;
+    else if (s === 'sample') inDevelopment++;
+    else if (s === 'done') completed++;
+    else if (s === 'prospect') prospects++;
+    else if (s === 'hold') onHold++;
+  });
+  
+  return {
+    totalRevenue, totalOutstanding, totalProfit,
+    totalSampleRevenue, totalSampleProfit,
+    invoicesPaidCount, invoicesUnpaidCount,
+    overdueAmount, overdueCount,
+    avgDaysToPayment, pipelineValue, acceptedQuotesCount,
+    quotesSent, quotesAccepted, quoteAcceptanceRate,
+    samplesCount, samplesConverted, sampleConversionRate,
+    avgOrderValue, top3, top3Share, repeatRate,
+    inProduction, inDevelopment, completed, prospects, onHold,
+    totalActiveClients
+  };
+}
+
+function renderMetricsPanel() {
+  const el = document.getElementById('metrics-panel-content');
+  if (!el) return;
+  const period = parseInt(document.getElementById('metrics-panel-period')?.value || '90');
+  const m = calcBusinessMetrics(period);
+  const periodLabel = period === 0 ? 'all time' : period + ' days';
+  
+  const fmt = n => '€' + (n||0).toFixed(0);
+  const stat = (label, val, color, sublabel) => 
+    '<div class="stat"><div class="stat-label">' + label + '</div><div class="stat-val" style="color:' + (color||'var(--text)') + '">' + val + '</div>' +
+    (sublabel ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + sublabel + '</div>' : '') + '</div>';
+  
+  let html = '';
+  
+  // CASH FLOW
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">💰 Cash flow</span><span style="font-size:11px;color:var(--text3)">' + periodLabel + '</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+  html += stat('Revenue (paid)', fmt(m.totalRevenue), 'var(--green)');
+  html += stat('Outstanding', fmt(m.totalOutstanding), 'var(--amber)');
+  html += stat('Profit (paid)', fmt(m.totalProfit), 'var(--green)');
+  html += stat('Overdue', fmt(m.overdueAmount), m.overdueCount > 0 ? 'var(--red)' : 'var(--text3)', m.overdueCount + ' invoice' + (m.overdueCount !== 1 ? 's' : ''));
+  html += stat('Avg days to pay', m.avgDaysToPayment != null ? m.avgDaysToPayment + 'd' : '—', 'var(--accent)', 'time clients take to pay');
+  html += stat('Pipeline value', fmt(m.pipelineValue), 'var(--accent)', m.acceptedQuotesCount + ' accepted quote' + (m.acceptedQuotesCount !== 1 ? 's' : ''));
+  html += '</div></div></div>';
+  
+  // SALES FUNNEL
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">📈 Sales funnel</span><span style="font-size:11px;color:var(--text3)">' + periodLabel + '</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+  html += stat('Quotes sent', m.quotesSent, 'var(--text)');
+  html += stat('Quotes accepted', m.quotesAccepted, 'var(--green)');
+  html += stat('Quote acceptance', m.quoteAcceptanceRate != null ? m.quoteAcceptanceRate + '%' : '—', 'var(--accent)', 'closing rate');
+  html += stat('Samples sent', m.samplesCount, 'var(--text)');
+  html += stat('Samples → bulk', m.samplesConverted, 'var(--green)');
+  html += stat('Sample conversion', m.sampleConversionRate != null ? m.sampleConversionRate + '%' : '—', 'var(--accent)', 'samples becoming orders');
+  html += '</div></div></div>';
+  
+  // BUSINESS HEALTH
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">🏥 Business health</span><span style="font-size:11px;color:var(--text3)">' + periodLabel + '</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+  html += stat('Avg order value', fmt(m.avgOrderValue), 'var(--text)', 'per invoice');
+  html += stat('Repeat client rate', m.repeatRate != null ? m.repeatRate + '%' : '—', 'var(--accent)', 'clients with 2+ orders');
+  html += stat('Top 3 share', m.top3Share > 0 ? m.top3Share + '%' : '—', m.top3Share > 70 ? 'var(--red)' : m.top3Share > 50 ? 'var(--amber)' : 'var(--green)', 'concentration risk');
+  html += '</div>';
+  
+  if (m.top3.length > 0) {
+    html += '<div style="margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border2)">';
+    html += '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Top clients by revenue</div>';
+    m.top3.forEach((entry, i) => {
+      const pct = m.totalRevenue > 0 ? Math.round((entry[1] / m.totalRevenue) * 100) : 0;
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px"><span><strong>' + (i+1) + '.</strong> ' + entry[0] + '</span><span style="color:var(--accent)">' + fmt(entry[1]) + ' <span style="color:var(--text3);font-size:11px">(' + pct + '%)</span></span></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div></div>';
+  
+  // PIPELINE BY STAGE
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">📦 Pipeline by stage</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+  html += stat('In development', m.inDevelopment, 'var(--accent)', 'sampling stage');
+  html += stat('In production', m.inProduction, 'var(--green)', 'bulk stage');
+  html += stat('Completed', m.completed, 'var(--text3)', 'orders delivered');
+  html += '</div></div></div>';
+  
+  // SAMPLE BUSINESS
+  if (m.totalSampleRevenue > 0 || m.samplesCount > 0) {
+    html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">🧵 Sample business</span><span style="font-size:11px;color:var(--text3)">' + periodLabel + '</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+    html += stat('Sample revenue', fmt(m.totalSampleRevenue), '#c4a572', 'paid');
+    html += stat('Sample profit', fmt(m.totalSampleProfit), '#c4a572', 'commission + proto fees');
+    html += stat('Conversion to bulk', m.sampleConversionRate != null ? m.sampleConversionRate + '%' : '—', 'var(--accent)');
+    html += '</div></div></div>';
+  }
+  
+  el.innerHTML = html;
 }
 
 // KEYBOARD & START
