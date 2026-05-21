@@ -3730,8 +3730,11 @@ function calcBusinessMetrics(periodDays) {
       if (!inPeriod(q.date)) return;
       if (q.isSample) {
         samplesCount++;
-        // Sample → bulk conversion: did this client later get a non-sample accepted quote / invoice?
-        if (invs.some(inv => !inv.isSample && new Date(inv.date) > new Date(q.date))) {
+        // Sample → bulk conversion: client later got a production invoice OR an accepted production quote
+        const sampleDate = new Date(q.date).getTime();
+        const convertedViaInvoice = invs.some(inv => !inv.isSample && new Date(inv.date).getTime() > sampleDate);
+        const convertedViaQuote = quotes.some(qq => !qq.isSample && qq.status === 'accepted' && new Date(qq.date).getTime() > sampleDate);
+        if (convertedViaInvoice || convertedViaQuote) {
           samplesConverted++;
         }
       } else {
