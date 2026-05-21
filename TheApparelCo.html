@@ -2588,7 +2588,7 @@ function filterClientsByStatus(arr, filter) {
     return arr.filter(c => {
       const invs = lsGet('invoices_'+c.id, []);
       if (!invs.length) return false;
-      // Show clients with at least one overdue unpaid invoice
+      // Show clients with at least one overdue unpaid invoice (production OR sample)
       return invs.some(inv => {
         if (isInvoicePaid(inv)) return false;
         if (!inv.date) return false;
@@ -3648,6 +3648,7 @@ function calcBusinessMetrics(periodDays) {
   let totalSampleRevenue = 0, totalSampleProfit = 0;
   let invoicesPaidCount = 0, invoicesUnpaidCount = 0;
   let overdueAmount = 0, overdueCount = 0;
+  let sampleOverdueAmount = 0, sampleOverdueCount = 0;
   let totalDaysToPayment = 0, daysToPaymentCount = 0;
   let pipelineValue = 0, acceptedQuotesCount = 0;
   let quotesSent = 0, quotesAccepted = 0;
@@ -3686,6 +3687,14 @@ function calcBusinessMetrics(periodDays) {
       if (inv.isSample) {
         totalSampleRevenue += paid;
         if (paid > 0 && fullTotal > 0) totalSampleProfit += fullProfit * (paid / fullTotal);
+        // Sample overdue — tracked separately
+        if (!isPaid && inv.date) {
+          const dueDate = new Date(new Date(inv.date).getTime() + (parseInt(inv.due)||14) * 86400000);
+          if (nowMs > dueDate.getTime()) {
+            sampleOverdueAmount += Math.max(0, due - paid);
+            sampleOverdueCount++;
+          }
+        }
       } else {
         clientProdInvoices++;
         totalRevenue += paid;
@@ -3776,6 +3785,7 @@ function calcBusinessMetrics(periodDays) {
     totalSampleRevenue, totalSampleProfit,
     invoicesPaidCount, invoicesUnpaidCount,
     overdueAmount, overdueCount,
+    sampleOverdueAmount, sampleOverdueCount,
     avgDaysToPayment, pipelineValue, acceptedQuotesCount,
     quotesSent, quotesAccepted, quoteAcceptanceRate,
     samplesCount, samplesConverted, sampleConversionRate,
@@ -3804,7 +3814,8 @@ function renderMetricsPanel() {
   html += stat('Revenue (paid)', fmt(m.totalRevenue), 'var(--green)');
   html += stat('Outstanding', fmt(m.totalOutstanding), 'var(--amber)');
   html += stat('Profit (paid)', fmt(m.totalProfit), 'var(--green)');
-  html += stat('Overdue', fmt(m.overdueAmount), m.overdueCount > 0 ? 'var(--red)' : 'var(--text3)', m.overdueCount + ' invoice' + (m.overdueCount !== 1 ? 's' : ''));
+  html += stat('Overdue (production)', fmt(m.overdueAmount), m.overdueCount > 0 ? 'var(--red)' : 'var(--text3)', m.overdueCount + ' invoice' + (m.overdueCount !== 1 ? 's' : ''));
+  html += stat('Overdue (samples)', fmt(m.sampleOverdueAmount), m.sampleOverdueCount > 0 ? 'var(--amber)' : 'var(--text3)', m.sampleOverdueCount + ' invoice' + (m.sampleOverdueCount !== 1 ? 's' : ''));
   html += stat('Avg days to pay', m.avgDaysToPayment != null ? m.avgDaysToPayment + 'd' : '—', 'var(--accent)', 'time clients take to pay');
   html += stat('Pipeline value', fmt(m.pipelineValue), 'var(--accent)', m.acceptedQuotesCount + ' accepted quote' + (m.acceptedQuotesCount !== 1 ? 's' : ''));
   html += '</div></div></div>';
