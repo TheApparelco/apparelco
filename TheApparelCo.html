@@ -361,7 +361,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="nav-item" onclick="showPanel('settings')" id="nav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
     </div>
     <hr class="sidebar-divider">
-    <div class="sidebar-label">Clients <button class="btn btn-xs btn-ghost" onclick="openClientModal()" style="padding:1px 6px;font-size:15px;line-height:1">+</button></div>
+    <div style="display:flex;gap:0;padding:4px 8px 6px;background:transparent">
+      <button type="button" id="sidebar-tab-clients" onclick="setSidebarMode('clients')" style="flex:1;padding:6px;background:var(--surface3);color:var(--accent);border:none;border-radius:6px 0 0 6px;font-weight:500;cursor:pointer;font-size:11px;font-family:inherit">Clients</button>
+      <button type="button" id="sidebar-tab-factories" onclick="setSidebarMode('factories')" style="flex:1;padding:6px;background:var(--surface2);color:var(--text3);border:none;border-radius:0 6px 6px 0;font-weight:500;cursor:pointer;font-size:11px;font-family:inherit">Factories</button>
+    </div>
+    <div id="sidebar-clients-section">
+    <div class="sidebar-label" style="padding-top:2px">Clients <button class="btn btn-xs btn-ghost" onclick="openClientModal()" style="padding:1px 6px;font-size:15px;line-height:1">+</button></div>
     <div style="padding:0 8px 6px">
       <select id="sidebar-filter" onchange="renderSidebarClients()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2)">
         <option value="all">All clients</option>
@@ -373,14 +378,32 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       </select>
     </div>
     <div class="client-list-scroll" id="sidebar-clients"></div>
+    </div>
+    <div id="sidebar-factories-section" style="display:none">
+      <div class="sidebar-label" style="padding-top:2px">Factories <button class="btn btn-xs btn-ghost" onclick="openFactoryModal()" style="padding:1px 6px;font-size:15px;line-height:1">+</button></div>
+      <div style="padding:0 8px 6px">
+        <select id="sidebar-factory-filter" onchange="renderSidebarFactories()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2)">
+          <option value="all">All factories</option>
+          <option value="active">Active</option>
+          <option value="trial">Trial</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+      <div class="client-list-scroll" id="sidebar-factories"></div>
+    </div>
   </div>
   <div class="main">
     <div class="panel active" id="panel-dashboard"><div id="dashboard-content"></div></div>
     <div class="panel" id="panel-clients">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0">
-        <div class="panel-title" style="margin:0">Clients</div>
-        <button class="btn btn-sm btn-primary" onclick="openClientModal()">+ New</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
+        <div class="panel-title" style="margin:0" id="mobile-list-title">Clients</div>
+        <button class="btn btn-sm btn-primary" id="mobile-add-btn" onclick="mobileAddNew()">+ New</button>
       </div>
+      <div style="display:flex;gap:0;margin-bottom:12px;background:var(--surface2);border-radius:8px;padding:3px">
+        <button type="button" id="mob-tab-clients" onclick="setMobileMode('clients')" style="flex:1;padding:8px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">Clients</button>
+        <button type="button" id="mob-tab-factories" onclick="setMobileMode('factories')" style="flex:1;padding:8px;background:transparent;color:var(--text2);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">Factories</button>
+      </div>
+      <div id="mobile-clients-wrap">
       <div class="card"><div class="card-body" style="padding:10px 14px">
         <select id="mobile-clients-filter" onchange="renderClientsPanel()" style="font-size:13px">
           <option value="all">All clients</option>
@@ -391,8 +414,13 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <option value="paid">All invoices paid</option>
         </select>
       </div></div>
-      <div class="card" style="overflow:hidden"><div id="clients-panel-content"></div></div>
+      </div>
+      <div id="mobile-factories-wrap" style="display:none">
+        <div class="card" style="overflow:hidden"><div id="mobile-factories-content"></div></div>
+      </div>
+      <div class="card" style="overflow:hidden" id="mobile-clients-list-card"><div id="clients-panel-content"></div></div>
     </div>
+    <div class="panel" id="panel-factory"><div id="factory-detail-content"></div></div>
     <div class="panel" id="panel-client"><div id="client-content"></div></div>
     <div class="panel" id="panel-pricing">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-shrink:0"><div class="panel-title" style="margin:0">Pricing calculator</div></div>
@@ -753,9 +781,65 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <input id="f-vat" placeholder="e.g. PT123456789">
   </div><div class="field"><label>Currency</label><select id="f-cur"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div></div>
   <div class="grid2"><div class="field"><label>Default commission (%)</label><input id="f-commission" type="number" value="20"></div><div class="field"><label>Garment types</label><input id="f-garments" placeholder="e.g. hoodies, tees"></div></div>
+  <div class="field"><label>Assigned factory</label><select id="f-factory"><option value="">— None —</option></select></div>
   <div class="field"><label>Notes</label><textarea id="f-notes" style="min-height:50px"></textarea></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('client-modal')">Cancel</button><button class="btn btn-primary" id="modal-save-btn" onclick="saveClient()">Save client</button></div>
 </div></div>
+
+<div class="overlay" id="factory-modal"><div class="modal" style="width:700px">
+  <div class="modal-title" id="factory-modal-title">New factory</div>
+
+  <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:4px 0 8px">Basic information</div>
+  <div class="grid2"><div class="field"><label>Factory name *</label><input id="ff-name" placeholder="e.g. Porto Knitwear Lda"></div><div class="field"><label>Contact name</label><input id="ff-contact"></div></div>
+  <div class="grid2"><div class="field"><label>Email</label><input id="ff-email" type="email"></div><div class="field"><label>Phone</label><input id="ff-phone"></div></div>
+  <div class="grid2"><div class="field"><label>WhatsApp</label><input id="ff-wa" placeholder="+351..."></div><div class="field"><label>Website</label><input id="ff-website" placeholder="optional"></div></div>
+  <div class="field"><label>Address</label><textarea id="ff-address" style="min-height:46px"></textarea></div>
+  <div class="grid3">
+    <div class="field"><label>City</label><input id="ff-city"></div>
+    <div class="field"><label>Country</label><input id="ff-country" placeholder="Portugal"></div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:6px">
+        <select id="ff-taxtype" style="font-size:11px;padding:3px 6px;width:auto;border-radius:5px">
+          <option value="vat">VAT</option><option value="ein">EIN</option><option value="other">Other</option>
+        </select>
+        <span>number</span>
+      </label>
+      <input id="ff-vat" placeholder="e.g. PT123456789">
+    </div>
+  </div>
+
+  <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:14px 0 8px">Production capabilities</div>
+  <div class="field"><label>Styles produced</label><input id="ff-styles" placeholder="e.g. hoodies, tees, knitwear"></div>
+  <div class="field"><label>Fabrics & materials</label><input id="ff-fabrics" placeholder="e.g. organic cotton jersey, French terry, wovens"></div>
+  <div class="grid3">
+    <div class="field"><label>MOQ per style</label><input id="ff-moq" placeholder="e.g. 150"></div>
+    <div class="field"><label>Sample lead time (days)</label><input id="ff-sample-lead" type="number" placeholder="e.g. 14"></div>
+    <div class="field"><label>Bulk lead time (days)</label><input id="ff-bulk-lead" type="number" placeholder="e.g. 45"></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label>Monthly capacity (units)</label><input id="ff-capacity" placeholder="e.g. 5000"></div>
+    <div class="field"><label>Certifications</label><input id="ff-certs" placeholder="GOTS, OEKO-TEX, BSCI"></div>
+  </div>
+
+  <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:14px 0 8px">Financial</div>
+  <div class="grid3">
+    <div class="field"><label>Payment terms</label><input id="ff-payterms" placeholder="e.g. 50% upfront"></div>
+    <div class="field"><label>Currency</label><select id="ff-currency"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
+    <div class="field"><label>Started working</label><input id="ff-startdate" type="date"></div>
+  </div>
+  <div class="field"><label>Bank details</label><textarea id="ff-bank" style="min-height:46px" placeholder="Account holder, IBAN, SWIFT, etc."></textarea></div>
+
+  <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:14px 0 8px">Relationship</div>
+  <div class="grid3">
+    <div class="field"><label>Status</label><select id="ff-status"><option value="active">Active</option><option value="trial">Trial</option><option value="inactive">Inactive</option><option value="blacklisted">Blacklisted</option></select></div>
+    <div class="field"><label>Rating (1-5)</label><select id="ff-rating"><option value="0">Not rated</option><option value="1">★</option><option value="2">★★</option><option value="3">★★★</option><option value="4">★★★★</option><option value="5">★★★★★</option></select></div>
+    <div class="field"></div>
+  </div>
+  <div class="field"><label>Notes</label><textarea id="ff-notes" style="min-height:46px" placeholder="e.g. great for premium finishing, slow on embroidery"></textarea></div>
+
+  <div class="modal-actions"><button class="btn" onclick="closeModal('factory-modal')">Cancel</button><button class="btn btn-primary" id="factory-save-btn" onclick="saveFactory()">Save factory</button></div>
+</div></div>
+
 
 <div class="overlay" id="quote-modal"><div class="modal" style="width:700px"><div class="modal-title" id="quote-modal-title">Quote</div><div id="quote-modal-body"></div><div class="modal-actions" id="quote-modal-actions"></div></div></div>
 <div class="overlay" id="payment-modal"><div class="modal" style="width:480px"><div class="modal-title">Mark payment</div><div id="payment-modal-body"></div><div class="modal-actions" id="payment-modal-actions"></div></div></div>
@@ -792,6 +876,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 </div>
 <div class="toast" id="toast"></div>
 <input type="file" id="restore-file-input" accept=".json,application/json" style="display:none" onchange="handleRestoreFile(event)">
+<input type="file" id="factory-file-input" style="display:none" multiple onchange="handleFactoryFile(event)">
 <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
 <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFiles(event)">
 <input type="file" id="doc-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ai,.eps,.png,.jpg,.jpeg,.zip" multiple style="display:none" onchange="handleDocFiles(event)">
@@ -1111,6 +1196,7 @@ function downloadBackup(){
     invoices: {},
     stepfiles: {},
     company: lsGet('tac_company', {}),
+    factories: lsGet('tac_factories', []),
     invCounter: lsGet('tac_inv_counter', '0'),
     quoteCounter: lsGet('tac_quote_counter', '0'),
     sampleInvCounter: lsGet('tac_sample_inv_counter', '0'),
@@ -1154,6 +1240,7 @@ async function showApp(){
       await loadAllClients();setSyncStatus('local');
     }
     clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});
+    await loadAllFactories();
   } catch(e) { console.error('Data load error:', e); }
   
   // Load settings BEFORE rendering anything that depends on them
@@ -1226,7 +1313,7 @@ function fmtMoney(n,cur){return sym(cur||'EUR')+(n||0).toFixed(2);}
 function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 
 // PANELS
-function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}if(name==='metrics'){renderMetricsPanel();}}
+function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}if(name==='metrics'){renderMetricsPanel();}if(name==='factory'&&clientId){const el=document.getElementById('fn-'+clientId);if(el)el.classList.add('active');renderFactoryDetail(clientId);}}
 
 // DASHBOARD
 function renderDashboard(){
@@ -1267,6 +1354,220 @@ clients.forEach(c=>{
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
+
+
+// FACTORY DETAIL RENDER
+function calcFactoryPerformance(factoryId){
+  const linked = clientsForFactory(factoryId);
+  const sampleTurnarounds = [], bulkTimes = [], fullCycles = [];
+  let onTimeCount = 0, totalWithDispatch = 0;
+  const f = getFactory(factoryId);
+  const bulkQuoted = parseInt(f?.bulkLeadTime) || 0;
+  linked.forEach(c => {
+    const m = calcClientMetrics(c.id);
+    if(m.sampleTurnaround != null) sampleTurnarounds.push(m.sampleTurnaround);
+    if(m.bulkProduction != null) bulkTimes.push(m.bulkProduction);
+    if(m.totalOnboardToDispatch != null) {
+      fullCycles.push(m.totalOnboardToDispatch);
+      // On-time = dispatched within quoted bulk lead time (rough proxy)
+      if(bulkQuoted > 0 && m.bulkProduction != null){
+        totalWithDispatch++;
+        if(m.bulkProduction <= bulkQuoted) onTimeCount++;
+      }
+    }
+  });
+  const avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  return {
+    linkedCount: linked.length,
+    avgSampleTurnaround: avg(sampleTurnarounds),
+    avgBulkTime: avg(bulkTimes),
+    avgFullCycle: avg(fullCycles),
+    sampleDataPoints: sampleTurnarounds.length,
+    bulkDataPoints: bulkTimes.length,
+    onTimeRate: totalWithDispatch > 0 ? Math.round((onTimeCount/totalWithDispatch)*100) : null
+  };
+}
+
+function renderFactoryDetail(id){
+  const f = getFactory(id);
+  const el = document.getElementById('factory-detail-content');
+  if(!f){ el.innerHTML = '<div class="panel-title">Factory not found</div>'; return; }
+  const perf = calcFactoryPerformance(id);
+  const linked = clientsForFactory(id);
+  const taxLabel = f.taxType === 'ein' ? 'EIN' : f.taxType === 'other' ? 'Tax ID' : 'VAT';
+  const stars = f.rating ? '★'.repeat(f.rating) + '☆'.repeat(5-f.rating) : '—';
+  const statusBadge = '<span class="badge-xs badge-'+(f.status==='active'?'active':f.status==='trial'?'sample':'done')+'">'+(f.status||'active')+'</span>';
+  
+  const infoRow = (label, val) => val ? '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:0.5px solid var(--border2)"><span style="color:var(--text3)">'+label+'</span><span style="text-align:right;max-width:60%">'+val+'</span></div>' : '';
+  
+  let html = '';
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">';
+  html += '<div style="display:flex;align-items:center;gap:12px"><div class="avatar" style="width:44px;height:44px">'+initials(f.name)+'</div><div><div class="panel-title" style="margin:0">'+f.name+'</div><div style="font-size:12px;color:var(--text3)">'+statusBadge+' &nbsp;'+(f.city?f.city+', ':'')+(f.country||'')+'</div></div></div>';
+  html += '<div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="openFactoryModal(\''+f.id+'\')">Edit</button><button class="btn btn-sm" style="color:var(--red)" onclick="deleteFactory(\''+f.id+'\')">Delete</button></div>';
+  html += '</div>';
+  
+  // Performance card (auto-calculated)
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">📊 Performance</span><span style="font-size:11px;color:var(--text3)">from '+perf.linkedCount+' linked client'+(perf.linkedCount!==1?'s':'')+'</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
+  html += '<div class="stat"><div class="stat-label">Avg sample turnaround</div><div class="stat-val" style="color:var(--accent)">'+(perf.avgSampleTurnaround!=null?perf.avgSampleTurnaround+'d':'—')+'</div>'+(perf.sampleDataPoints?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+perf.sampleDataPoints+' order'+(perf.sampleDataPoints!==1?'s':'')+'</div>':'')+'</div>';
+  html += '<div class="stat"><div class="stat-label">Avg bulk time</div><div class="stat-val" style="color:var(--accent)">'+(perf.avgBulkTime!=null?perf.avgBulkTime+'d':'—')+'</div>'+(perf.bulkDataPoints?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+perf.bulkDataPoints+' order'+(perf.bulkDataPoints!==1?'s':'')+'</div>':'')+'</div>';
+  html += '<div class="stat"><div class="stat-label">On-time rate</div><div class="stat-val" style="color:'+(perf.onTimeRate!=null?(perf.onTimeRate>=80?'var(--green)':perf.onTimeRate>=50?'var(--amber)':'var(--red)'):'var(--text3)')+'">'+(perf.onTimeRate!=null?perf.onTimeRate+'%':'—')+'</div></div>';
+  html += '</div></div></div>';
+  
+  // Two-column layout for info
+  html += '<div class="grid2" style="align-items:start">';
+  
+  // Left: contact + production
+  html += '<div>';
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Contact</span></div><div class="card-body">';
+  html += infoRow('Contact', f.contact);
+  html += infoRow('Email', f.email);
+  html += infoRow('Phone', f.phone);
+  html += infoRow('WhatsApp', f.wa);
+  html += infoRow('Website', f.website);
+  html += infoRow('Address', f.address);
+  html += infoRow(taxLabel, f.vat);
+  html += '</div></div>';
+  
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Production</span></div><div class="card-body">';
+  html += infoRow('Styles', f.styles);
+  html += infoRow('Fabrics', f.fabrics);
+  html += infoRow('MOQ/style', f.moq);
+  html += infoRow('Sample lead', f.sampleLeadTime ? f.sampleLeadTime+' days' : '');
+  html += infoRow('Bulk lead', f.bulkLeadTime ? f.bulkLeadTime+' days' : '');
+  html += infoRow('Capacity', f.capacity ? f.capacity+' units/mo' : '');
+  html += infoRow('Certifications', f.certifications);
+  html += '</div></div>';
+  html += '</div>';
+  
+  // Right: financial + relationship + linked clients
+  html += '<div>';
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Financial & relationship</span></div><div class="card-body">';
+  html += infoRow('Payment terms', f.paymentTerms);
+  html += infoRow('Currency', f.currency);
+  html += infoRow('Bank details', f.bankDetails ? f.bankDetails.replace(/\n/g,'<br>') : '');
+  html += infoRow('Rating', stars);
+  html += infoRow('Working since', f.startDate ? fmtDate(f.startDate) : '');
+  html += infoRow('Notes', f.notes);
+  html += '</div></div>';
+  
+  // Linked clients
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Linked clients</span><span style="font-size:11px;color:var(--text3)">'+linked.length+'</span></div><div class="card-body">';
+  if(linked.length){
+    html += linked.map(c => '<div onclick="showPanel(\'client\',\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:0.5px solid var(--border2)"><div class="avatar-xs">'+initials(c.brand)+'</div><span style="flex:1;font-size:13px">'+c.brand+'</span><span class="badge-xs badge-'+c.status+'">'+c.status+'</span></div>').join('');
+  } else {
+    html += '<div style="font-size:12px;color:var(--text3);padding:8px 0">No clients linked yet. Link a factory when creating or editing a client.</div>';
+  }
+  html += '</div></div>';
+  html += '</div>';
+  html += '</div>'; // end grid2
+  
+  // Contracts
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">📑 Contracts</span><button class="btn btn-xs btn-ghost" onclick="triggerFactoryFile(\''+f.id+'\',\'contract\')">+ Upload</button></div><div class="card-body">';
+  html += renderFactoryFiles(f, 'contracts');
+  html += '</div></div>';
+  
+  // Documents
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">📁 Documents</span><button class="btn btn-xs btn-ghost" onclick="triggerFactoryFile(\''+f.id+'\',\'document\')">+ Upload</button></div><div class="card-body">';
+  html += renderFactoryFiles(f, 'documents');
+  html += '</div></div>';
+  
+  el.innerHTML = html;
+}
+
+function renderFactoryFiles(f, type){
+  const files = f[type] || [];
+  if(!files.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0">No '+type+' uploaded yet.</div>';
+  return '<div class="step-files">'+files.map((file,i)=>'<div class="file-chip"><span>'+fileIcon(file.name)+'</span><a href="'+file.data+'" download="'+file.name+'" style="color:var(--text);text-decoration:none" class="file-chip-name">'+file.name+'</a><span class="file-chip-del" onclick="delFactoryFile(\''+f.id+'\',\''+type+'\','+i+')">✕</span></div>').join('')+'</div>';
+}
+
+function triggerFactoryFile(factoryId, fileType){
+  activeFactoryFileId = factoryId;
+  activeFactoryFileType = fileType;
+  document.getElementById('factory-file-input').click();
+}
+
+async function handleFactoryFile(e){
+  const files = Array.from(e.target.files);
+  const f = getFactory(activeFactoryFileId);
+  if(!f) return;
+  const key = activeFactoryFileType === 'contract' ? 'contracts' : 'documents';
+  if(!f[key]) f[key] = [];
+  for(const file of files){
+    const du = await readAsDataUrl(file);
+    const nm = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+    f[key].push({ name:nm, size:file.size, data:du });
+    if(driveConnected){ try{ await driveUploadBinary('factoryfile_'+f.id+'_'+Date.now()+'_'+nm, du); }catch{} }
+  }
+  // Save factory
+  const idx = factories.findIndex(x=>String(x.id)===String(f.id));
+  if(idx>=0) factories[idx]=f;
+  lsSet('tac_factories', factories);
+  if(driveConnected) driveUploadJSON('factory_'+f.id+'.json', f).catch(()=>{});
+  e.target.value='';
+  renderFactoryDetail(f.id);
+}
+
+async function delFactoryFile(factoryId, type, idx){
+  const ok = await themedConfirm('Delete file?','Remove this file permanently?','Delete','🗑️');
+  if(!ok) return;
+  const f = getFactory(factoryId);
+  if(!f || !f[type]) return;
+  f[type].splice(idx,1);
+  const fi = factories.findIndex(x=>String(x.id)===String(f.id));
+  if(fi>=0) factories[fi]=f;
+  lsSet('tac_factories', factories);
+  if(driveConnected) driveUploadJSON('factory_'+f.id+'.json', f).catch(()=>{});
+  renderFactoryDetail(factoryId);
+}
+
+function renderFactoriesList(){
+  renderSidebarFactories();
+}
+
+// FACTORY SIDEBAR + MODE SWITCH
+let sidebarMode = 'clients';
+function setSidebarMode(mode){
+  sidebarMode = mode;
+  const clientsTab = document.getElementById('sidebar-tab-clients');
+  const factoriesTab = document.getElementById('sidebar-tab-factories');
+  const clientsSection = document.getElementById('sidebar-clients-section');
+  const factoriesSection = document.getElementById('sidebar-factories-section');
+  if(mode === 'factories'){
+    factoriesTab.style.background='var(--surface3)'; factoriesTab.style.color='var(--accent)';
+    clientsTab.style.background='var(--surface2)'; clientsTab.style.color='var(--text3)';
+    clientsSection.style.display='none';
+    factoriesSection.style.display='block';
+    renderSidebarFactories();
+  } else {
+    clientsTab.style.background='var(--surface3)'; clientsTab.style.color='var(--accent)';
+    factoriesTab.style.background='var(--surface2)'; factoriesTab.style.color='var(--text3)';
+    clientsSection.style.display='block';
+    factoriesSection.style.display='none';
+    renderSidebarClients();
+  }
+}
+
+function filterFactoriesByStatus(arr, filter){
+  if(filter === 'all' || !filter) return arr;
+  return arr.filter(f => (f.status||'active') === filter);
+}
+
+function renderSidebarFactories(){
+  const filter = document.getElementById('sidebar-factory-filter')?.value || 'all';
+  const filtered = filterFactoriesByStatus(factories, filter);
+  const container = document.getElementById('sidebar-factories');
+  if(!container) return;
+  if(!filtered.length){
+    container.innerHTML = '<div style="padding:14px 10px;font-size:11px;color:var(--text3);text-align:center">No factories yet. Click + to add one.</div>';
+    return;
+  }
+  container.innerHTML = filtered.map(f => {
+    const linkedCount = clientsForFactory(f.id).length;
+    return '<div class="client-nav" id="fn-'+f.id+'" onclick="showPanel(\'factory\',\''+f.id+'\')"><div class="avatar-xs">'+initials(f.name)+'</div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+f.name+'</span>'+(linkedCount?'<span style="font-size:10px;color:var(--text3)">'+linkedCount+'</span>':'')+'</div>';
+  }).join('');
+}
+
 function renderSidebarClients(){
   const filter = document.getElementById('sidebar-filter')?.value || 'all';
   const filtered = filterClientsByStatus(clients, filter);
@@ -1294,6 +1595,12 @@ function openClientModal(id){
   if(taxTypeEl) { taxTypeEl.value = c?.taxType||'vat'; updateTaxLabel(); }
   document.getElementById('f-cur').value=c?.currency||'EUR';
   document.getElementById('f-commission').value=c?.commission!=null?c.commission:20;
+  // Populate factory dropdown
+  const facSel = document.getElementById('f-factory');
+  if(facSel){
+    facSel.innerHTML = '<option value="">— None —</option>' + factories.map(f=>'<option value="'+f.id+'">'+f.name+'</option>').join('');
+    facSel.value = c?.factoryId || '';
+  }
   document.getElementById('client-modal').classList.add('open');
 }
 async function saveClient(){
@@ -1307,6 +1614,7 @@ async function saveClient(){
   ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
   c.currency=document.getElementById('f-cur').value;
   c.commission=parseFloat(document.getElementById('f-commission').value)||20;
+  c.factoryId=document.getElementById('f-factory')?.value||'';
   // Save to localStorage FIRST — instant, never fails, data always safe
   const idx=clients.findIndex(x=>String(x.id)===String(c.id));
   if(idx>=0)clients[idx]=c;else clients.push(c);
@@ -1408,6 +1716,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(c.wa?'<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">'+c.wa+'</span></div>':'')
 +(c.address?'<div class="detail-row"><span class="detail-key">Address</span><span class="detail-val">'+c.address+'</span></div>':'')
 +(c.country?'<div class="detail-row"><span class="detail-key">Country</span><span class="detail-val">'+c.country+'</span></div>':'')
++(c.factoryId&&getFactory(c.factoryId)?'<div class="detail-row"><span class="detail-key">Factory</span><span class="detail-val"><span onclick="showPanel(\'factory\',\''+c.factoryId+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline">'+factoryName(c.factoryId)+'</span></span></div>':'')
 +(c.vat?'<div class="detail-row"><span class="detail-key">'+(c.taxType==='ein'?'EIN':c.taxType==='other'?'Tax ID':'VAT')+'</span><span class="detail-val">'+c.vat+'</span></div>':'')
 +(c.currency?'<div class="detail-row"><span class="detail-key">Currency</span><span class="detail-val">'+c.currency+'</span></div>':'')
 +(c.commission!=null?'<div class="detail-row"><span class="detail-key">Commission</span><span class="detail-val">'+c.commission+'%</span></div>':'')
@@ -3344,6 +3653,53 @@ function updateMobileNavActive(panelName) {
 }
 
 // Mobile clients list view (replaces sidebar functionality)
+
+// MOBILE CLIENTS/FACTORIES TOGGLE
+let mobileMode = 'clients';
+function setMobileMode(mode){
+  mobileMode = mode;
+  const cTab = document.getElementById('mob-tab-clients');
+  const fTab = document.getElementById('mob-tab-factories');
+  const cWrap = document.getElementById('mobile-clients-wrap');
+  const fWrap = document.getElementById('mobile-factories-wrap');
+  const cListCard = document.getElementById('mobile-clients-list-card');
+  const title = document.getElementById('mobile-list-title');
+  if(mode === 'factories'){
+    if(fTab){ fTab.style.background='var(--accent)'; fTab.style.color='var(--bg)'; }
+    if(cTab){ cTab.style.background='transparent'; cTab.style.color='var(--text2)'; }
+    if(cWrap) cWrap.style.display='none';
+    if(cListCard) cListCard.style.display='none';
+    if(fWrap) fWrap.style.display='block';
+    if(title) title.textContent='Factories';
+    renderMobileFactories();
+  } else {
+    if(cTab){ cTab.style.background='var(--accent)'; cTab.style.color='var(--bg)'; }
+    if(fTab){ fTab.style.background='transparent'; fTab.style.color='var(--text2)'; }
+    if(cWrap) cWrap.style.display='block';
+    if(cListCard) cListCard.style.display='block';
+    if(fWrap) fWrap.style.display='none';
+    if(title) title.textContent='Clients';
+    renderClientsPanel();
+  }
+}
+function mobileAddNew(){
+  if(mobileMode === 'factories') openFactoryModal();
+  else openClientModal();
+}
+function renderMobileFactories(){
+  const el = document.getElementById('mobile-factories-content');
+  if(!el) return;
+  if(!factories.length){
+    el.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;opacity:0.35;margin-bottom:10px">🏭</div><p>No factories yet</p><button class="btn btn-primary" style="margin-top:14px" onclick="openFactoryModal()">+ Add factory</button></div>';
+    return;
+  }
+  el.innerHTML = factories.map(f => {
+    const linkedCount = clientsForFactory(f.id).length;
+    const meta = [f.city||f.country, f.styles, linkedCount?(linkedCount+' client'+(linkedCount!==1?'s':'')):''].filter(Boolean).join(' · ');
+    return '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'factory\',\''+f.id+'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(f.name)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+f.name+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+(meta||'—')+'</div></div><span class="badge-xs badge-'+(f.status==='active'?'active':f.status==='trial'?'sample':'done')+'">'+(f.status||'active')+'</span></div>';
+  }).join('');
+}
+
 function renderClientsPanel() {
   const el = document.getElementById('clients-panel-content');
   if (!el) return;
@@ -3353,7 +3709,7 @@ function renderClientsPanel() {
     el.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;opacity:0.35;margin-bottom:10px">🧵</div><p>'+(clients.length?'No clients match this filter':'No clients yet')+'</p><button class="btn btn-primary" style="margin-top:14px" onclick="openClientModal()">+ Add client</button></div>';
     return;
   }
-  el.innerHTML = filtered.map(c => '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'client\',\''+ c.id +'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+([c.contact,c.country].filter(Boolean).join(' · ')||'—')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('');
+  el.innerHTML = filtered.map(c => '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'client\',\''+ c.id +'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+([c.contact,c.country,c.factoryId?('🏭 '+factoryName(c.factoryId)):''].filter(Boolean).join(' · ')||'—')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('');
 }
 
 
@@ -3403,6 +3759,7 @@ async function restoreFromBackup(file) {
       if (data.logo) lsSet('tac_logo', data.logo);
       if (data.logoSize) lsSet('tac_logo_size', data.logoSize);
       if (data.theme) lsSet('tac_theme', data.theme);
+      if (data.factories) { lsSet('tac_factories', data.factories); factories = data.factories; }
       // Restore counters — take the HIGHER value to prevent going backwards
       if (data.invCounter) {
         const current = parseInt(lsGet('tac_inv_counter','0'))||0;
@@ -3536,6 +3893,165 @@ function resolveConfirm(answer) {
   if (_confirmResolve) { _confirmResolve(answer); _confirmResolve = null; }
 }
 
+
+
+// ════════════════════════════════════════════════════════
+// FACTORY DATA LAYER
+// ════════════════════════════════════════════════════════
+let factories = [];
+let editingFactoryId = null;
+let activeFactoryFileType = null; // 'contract' or 'document'
+let activeFactoryFileId = null;
+
+async function loadAllFactories(){
+  if (!driveConnected) { factories = lsGet('tac_factories', []); return; }
+  const factoryFiles = Object.keys(fileIndex).filter(name => /^factory_\d+\.json$/.test(name));
+  const loaded = [];
+  for (const filename of factoryFiles) {
+    const f = await driveDownloadJSON(filename).catch(() => null);
+    if (f && f.id) loaded.push(f);
+  }
+  factories = loaded.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  lsSet('tac_factories', factories);
+}
+
+function getFactory(id){
+  return factories.find(f => String(f.id) === String(id)) || null;
+}
+
+function factoryName(id){
+  const f = getFactory(id);
+  return f ? f.name : '';
+}
+
+// Returns clients linked to a given factory
+function clientsForFactory(factoryId){
+  return clients.filter(c => String(c.factoryId||'') === String(factoryId));
+}
+
+
+
+function openFactoryModal(id){
+  editingFactoryId = id || null;
+  const f = id ? getFactory(id) : null;
+  document.getElementById('factory-modal-title').textContent = f ? 'Edit factory' : 'New factory';
+  const btn = document.getElementById('factory-save-btn');
+  if(btn) btn.textContent = f ? 'Save changes' : 'Save factory';
+  const set = (fid, val) => { const el = document.getElementById(fid); if(el) el.value = val != null ? val : ''; };
+  set('ff-name', f?.name);
+  set('ff-contact', f?.contact);
+  set('ff-email', f?.email);
+  set('ff-phone', f?.phone);
+  set('ff-wa', f?.wa);
+  set('ff-website', f?.website);
+  set('ff-address', f?.address);
+  set('ff-city', f?.city);
+  set('ff-country', f?.country);
+  set('ff-taxtype', f?.taxType || 'vat');
+  set('ff-vat', f?.vat);
+  set('ff-styles', f?.styles);
+  set('ff-fabrics', f?.fabrics);
+  set('ff-moq', f?.moq);
+  set('ff-sample-lead', f?.sampleLeadTime);
+  set('ff-bulk-lead', f?.bulkLeadTime);
+  set('ff-capacity', f?.capacity);
+  set('ff-certs', f?.certifications);
+  set('ff-payterms', f?.paymentTerms);
+  set('ff-currency', f?.currency || 'EUR');
+  set('ff-startdate', f?.startDate);
+  set('ff-bank', f?.bankDetails);
+  set('ff-status', f?.status || 'active');
+  set('ff-rating', f?.rating || 0);
+  set('ff-notes', f?.notes);
+  document.getElementById('factory-modal').classList.add('open');
+}
+
+async function saveFactory(){
+  const btn = document.getElementById('factory-save-btn');
+  if(btn && btn.disabled) return;
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const name = document.getElementById('ff-name').value.trim();
+  if(!name){
+    await themedAlert('Factory name required','Please enter a factory name before saving.','⚠️');
+    if(btn){ btn.disabled=false; btn.textContent=editingFactoryId?'Save changes':'Save factory'; }
+    return;
+  }
+  let f = editingFactoryId ? getFactory(editingFactoryId) : { id:Date.now(), status:'active', contracts:[], documents:[] };
+  if(!f){ if(btn){btn.disabled=false;} return; }
+  if(!f.contracts) f.contracts = [];
+  if(!f.documents) f.documents = [];
+  // Text fields
+  const get = id => (document.getElementById(id)?.value || '').trim();
+  f.name = name;
+  f.taxType = document.getElementById('ff-taxtype')?.value || 'vat';
+  f.vat = get('ff-vat');
+  f.contact = get('ff-contact');
+  f.email = get('ff-email');
+  f.phone = get('ff-phone');
+  f.wa = get('ff-wa');
+  f.website = get('ff-website');
+  f.address = get('ff-address');
+  f.country = get('ff-country');
+  f.city = get('ff-city');
+  f.styles = get('ff-styles');
+  f.fabrics = get('ff-fabrics');
+  f.moq = get('ff-moq');
+  f.sampleLeadTime = get('ff-sample-lead');
+  f.bulkLeadTime = get('ff-bulk-lead');
+  f.capacity = get('ff-capacity');
+  f.certifications = get('ff-certs');
+  f.paymentTerms = get('ff-payterms');
+  f.currency = document.getElementById('ff-currency')?.value || 'EUR';
+  f.bankDetails = get('ff-bank');
+  f.rating = parseInt(document.getElementById('ff-rating')?.value || '0') || 0;
+  f.startDate = get('ff-startdate');
+  f.notes = get('ff-notes');
+  f.status = document.getElementById('ff-status')?.value || 'active';
+  // Save localStorage first
+  const idx = factories.findIndex(x => String(x.id)===String(f.id));
+  if(idx>=0) factories[idx]=f; else factories.push(f);
+  factories.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  lsSet('tac_factories', factories);
+  // Drive in background
+  if(driveConnected){
+    driveUploadJSON('factory_'+f.id+'.json', f)
+      .then(()=>setSyncStatus('synced'))
+      .catch(()=>{queueForSync('factory_'+f.id+'.json');setSyncStatus('offline');showToast('Saved locally ✓ — Drive sync pending');});
+  }
+  closeModal('factory-modal');
+  renderFactoriesList();
+  renderSidebarClients();
+  if(editingFactoryId) renderFactoryDetail(editingFactoryId);
+  if(btn){ btn.disabled=false; btn.textContent=editingFactoryId?'Save changes':'Save factory'; }
+}
+
+async function deleteFactory(id){
+  const f = getFactory(id);
+  const linked = clientsForFactory(id);
+  let msg = 'Delete this factory permanently?';
+  if(linked.length){
+    msg = 'This factory is linked to '+linked.length+' client'+(linked.length!==1?'s':'')+'. Deleting it will unlink them (clients are not deleted). Continue?';
+  }
+  const ok = await themedConfirm('Delete factory?', msg, 'Delete', '🗑️');
+  if(!ok) return;
+  // Unlink clients
+  linked.forEach(c => {
+    c.factoryId = '';
+    const ci = clients.findIndex(x=>String(x.id)===String(c.id));
+    if(ci>=0) clients[ci]=c;
+    if(driveConnected) driveUploadJSON('client_'+c.id+'.json', c).catch(()=>{});
+  });
+  lsSet('tac_clients', clients);
+  // Remove factory
+  factories = factories.filter(x => String(x.id)!==String(id));
+  lsSet('tac_factories', factories);
+  if(driveConnected){
+    driveDelete('factory_'+id+'.json').catch(()=>{});
+  }
+  renderFactoriesList();
+  renderSidebarClients();
+  showToast('Factory deleted');
+}
 
 // ════════════════════════════════════════════════════════
 // SEQUENTIAL NUMBER COUNTERS
