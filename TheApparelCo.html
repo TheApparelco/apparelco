@@ -43,6 +43,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .badge-active{background:rgba(109,191,133,0.15);color:var(--green);border:0.5px solid rgba(109,191,133,0.25)}
 .badge-sample{background:rgba(200,150,58,0.15);color:var(--amber);border:0.5px solid rgba(200,150,58,0.25)}
 .badge-done{background:var(--surface3);color:var(--text3);border:0.5px solid var(--border)}
+.badge-prospect{background:rgba(120,140,200,0.15);color:#8B9DC3;border:0.5px solid rgba(120,140,200,0.25)}
+.badge-hold{background:rgba(200,120,90,0.15);color:#C8785A;border:0.5px solid rgba(200,120,90,0.25)}
 .main{overflow:hidden;display:flex;flex-direction:column;min-height:0}
 .panel{display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 28px 40px;height:100%}
 .panel.active{display:block}
@@ -370,9 +372,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div style="padding:0 8px 6px">
       <select id="sidebar-filter" onchange="renderSidebarClients()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2)">
         <option value="all">All clients</option>
-        <option value="active">Active</option>
+        <option value="prospect">Prospect</option>
         <option value="sample">Sampling</option>
-        <option value="done">Done</option>
+        <option value="active">Production</option>
+        <option value="hold">On Hold</option>
+        <option value="done">Completed</option>
         <option value="unpaid">Has unpaid invoices</option>
         <option value="paid">All invoices paid</option>
       </select>
@@ -407,9 +411,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="card"><div class="card-body" style="padding:10px 14px">
         <select id="mobile-clients-filter" onchange="renderClientsPanel()" style="font-size:13px">
           <option value="all">All clients</option>
-          <option value="active">Active</option>
+          <option value="prospect">Prospect</option>
           <option value="sample">Sampling</option>
-          <option value="done">Done</option>
+          <option value="active">Production</option>
+          <option value="hold">On Hold</option>
+          <option value="done">Completed</option>
           <option value="unpaid">Has unpaid invoices</option>
           <option value="paid">All invoices paid</option>
         </select>
@@ -515,7 +521,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <div class="grid3" style="align-items:flex-end">
             <div class="field"><label>From date</label><input id="rep-from" type="date"></div>
             <div class="field"><label>To date</label><input id="rep-to" type="date"></div>
-            <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Has unpaid invoices</option><option value="overdue">Has overdue invoices</option><option value="paid">All invoices paid</option></select></div>
+            <div class="field"><label>Status</label><select id="rep-status"><option value="all">All clients</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Has unpaid invoices</option><option value="overdue">Has overdue invoices</option><option value="paid">All invoices paid</option></select></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="generateReport()">Generate report</button>
@@ -559,9 +565,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <div class="field" style="margin:0"><label>Status filter</label>
             <select id="wr-status">
               <option value="all">All clients</option>
-              <option value="active">Active</option>
+              <option value="prospect">Prospect</option>
               <option value="sample">Sampling</option>
-              <option value="done">Done</option>
+              <option value="active">Production</option>
+              <option value="hold">On Hold</option>
+              <option value="done">Completed</option>
               <option value="unpaid">Has unpaid invoices</option>
               <option value="paid">All invoices paid</option>
             </select>
@@ -839,6 +847,25 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
   <div class="modal-actions"><button class="btn" onclick="closeModal('factory-modal')">Cancel</button><button class="btn btn-primary" id="factory-save-btn" onclick="saveFactory()">Save factory</button></div>
 </div></div>
+
+<div class="overlay" id="factory-pay-modal"><div class="modal" style="width:540px">
+  <div class="modal-title">Factory payment</div>
+  <div class="grid2">
+    <div class="field"><label>Description</label><input id="fpay-label" placeholder="e.g. 50% production deposit"></div>
+    <div class="field"><label>Amount</label><input id="fpay-amount" type="number" step="0.01" placeholder="0.00"></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label>Currency</label><select id="fpay-currency"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
+    <div class="field"></div>
+  </div>
+  <div class="field"><label>Factory's invoice</label><div id="fpay-invoice-area"></div></div>
+  <div class="field"><label>Proof of payment</label><div id="fpay-proof-area"></div></div>
+  <div class="field"><label>Notes</label><textarea id="fpay-notes" style="min-height:44px"></textarea></div>
+  <button id="fpay-paid-btn" class="btn" style="width:100%;margin-bottom:12px" onclick="toggleFactoryPaid()">Mark as paid to factory</button>
+  <div class="modal-actions"><button class="btn" onclick="closeModal('factory-pay-modal')">Cancel</button><button class="btn btn-primary" onclick="saveFactoryPayDetails()">Save</button></div>
+</div></div>
+<input type="file" id="factory-pay-file-input" style="display:none" onchange="handleFactoryPayFile(event)">
+
 
 
 <div class="overlay" id="quote-modal"><div class="modal" style="width:700px"><div class="modal-title" id="quote-modal-title">Quote</div><div id="quote-modal-body"></div><div class="modal-actions" id="quote-modal-actions"></div></div></div>
@@ -1195,6 +1222,7 @@ function downloadBackup(){
     quotes: {},
     invoices: {},
     stepfiles: {},
+    factorypayments: {},
     company: lsGet('tac_company', {}),
     factories: lsGet('tac_factories', []),
     invCounter: lsGet('tac_inv_counter', '0'),
@@ -1212,6 +1240,7 @@ function downloadBackup(){
     data.quotes[c.id]      = lsGet('quotes_'+c.id, []);
     data.invoices[c.id]    = lsGet('invoices_'+c.id, []);
     data.stepfiles[c.id]   = lsGet('stepfiles_'+c.id, {});
+    data.factorypayments[c.id] = lsGet('factorypayments_'+c.id, []);
   });
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1241,6 +1270,15 @@ async function showApp(){
     }
     clients.forEach(c=>{if(c.quotes)lsSet('quotes_'+c.id,c.quotes);if(c.invoices)lsSet('invoices_'+c.id,c.invoices);});
     await loadAllFactories();
+    // Load factory payment records from Drive
+    if(driveConnected){
+      const fpFiles = Object.keys(fileIndex).filter(name => /^factorypayments_.+\.json$/.test(name));
+      for(const fn of fpFiles){
+        const cid = fn.replace('factorypayments_','').replace('.json','');
+        const data = await driveDownloadJSON(fn).catch(()=>null);
+        if(data) lsSet('factorypayments_'+cid, data);
+      }
+    }
   } catch(e) { console.error('Data load error:', e); }
   
   // Load settings BEFORE rendering anything that depends on them
@@ -1350,7 +1388,7 @@ clients.forEach(c=>{
       totPipeline += (q.totalClient || 0);
     }
   });
-});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="active">Active</option><option value="sample">Sampling</option><option value="done">Done</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('')+'</div></div>';
+});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('')+'</div></div>';
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
@@ -1454,7 +1492,7 @@ function renderFactoryDetail(id){
   // Linked clients
   html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Linked clients</span><span style="font-size:11px;color:var(--text3)">'+linked.length+'</span></div><div class="card-body">';
   if(linked.length){
-    html += linked.map(c => '<div onclick="showPanel(\'client\',\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:0.5px solid var(--border2)"><div class="avatar-xs">'+initials(c.brand)+'</div><span style="flex:1;font-size:13px">'+c.brand+'</span><span class="badge-xs badge-'+c.status+'">'+c.status+'</span></div>').join('');
+    html += linked.map(c => '<div onclick="showPanel(\'client\',\''+c.id+'\')" style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:0.5px solid var(--border2)"><div class="avatar-xs">'+initials(c.brand)+'</div><span style="flex:1;font-size:13px">'+c.brand+'</span><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('');
   } else {
     html += '<div style="font-size:12px;color:var(--text3);padding:8px 0">No clients linked yet. Link a factory when creating or editing a client.</div>';
   }
@@ -1470,6 +1508,23 @@ function renderFactoryDetail(id){
   // Documents
   html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">📁 Documents</span><button class="btn btn-xs btn-ghost" onclick="triggerFactoryFile(\''+f.id+'\',\'document\')">+ Upload</button></div><div class="card-body">';
   html += renderFactoryFiles(f, 'documents');
+  html += '</div></div>';
+  
+  // Factory payments across all linked clients (synced view)
+  const allPayments = factoryPaymentsForFactory(f.id);
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">💸 Payments to this factory</span><span style="font-size:11px;color:var(--text3)">across '+perf.linkedCount+' client'+(perf.linkedCount!==1?'s':'')+'</span></div><div class="card-body">';
+  if(allPayments.length){
+    let totalPaid=0, totalDue=0;
+    allPayments.forEach(p => {
+      const cur = p.currency || 'EUR';
+      if(p.paid) totalPaid += (p.amount||0); else totalDue += (p.amount||0);
+      const badge = p.paid ? '<span class="badge-xs badge-active">Paid</span>' : '<span class="badge-xs badge-sample">Unpaid</span>';
+      html += '<div onclick="showPanel(\'client\',\''+p.clientId+'\')" style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:0.5px solid var(--border2);font-size:13px"><span style="flex:1"><strong>'+p.clientBrand+'</strong> · '+p.label+'</span><span style="color:var(--text2)">'+fmtMoney(p.amount||0,cur)+'</span>'+badge+'</div>';
+    });
+    html += '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;font-size:13px"><span style="color:var(--text3)">Total paid: <strong style="color:var(--green)">'+fmtMoney(totalPaid,'EUR')+'</strong></span><span style="color:var(--text3)">Outstanding: <strong style="color:var(--amber)">'+fmtMoney(totalDue,'EUR')+'</strong></span></div>';
+  } else {
+    html += '<div style="font-size:12px;color:var(--text3);padding:8px 0">No factory payments recorded yet. Add them inside each client under the Factory invoices tab.</div>';
+  }
   html += '</div></div>';
   
   el.innerHTML = html;
@@ -1576,7 +1631,7 @@ function renderSidebarClients(){
     container.innerHTML = '<div style="padding:14px 10px;font-size:11px;color:var(--text3);text-align:center">No clients match this filter</div>';
     return;
   }
-  container.innerHTML = filtered.map(c=>'<div class="client-nav" id="cn-'+c.id+'" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar-xs">'+initials(c.brand)+'</div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+c.brand+'</span><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'●':c.status==='sample'?'◐':'○')+'</span></div>').join('');
+  container.innerHTML = filtered.map(c=>'<div class="client-nav" id="cn-'+c.id+'" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar-xs">'+initials(c.brand)+'</div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">'+c.brand+'</span><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'●':c.status==='sample'?'◐':c.status==='prospect'?'◇':c.status==='hold'?'⏸':'○')+'</span></div>').join('');
 }
 
 // CLIENT MODAL
@@ -1706,8 +1761,8 @@ function renderClientStats(clientId){
 
 // CLIENT DETAIL
 let currentClientId=null;
-async function renderClientDetail(id){currentClientId=id;const c=clients.find(x=>String(x.id)===String(id));if(!c)return;const checks=await loadChecksData(id);const photos=listFilesData(id,'photos');const docs=listFilesData(id,'techpacks');const factoryInvs=listFilesData(id,'factoryinvoices');const quotes=getClientQuotes(id);const invoices=getClientInvoices(id);const el=document.getElementById('client-content');
-const statusSelect='<select class="btn btn-sm" onchange="updateStatus(\''+id+'\',this.value)" style="padding:5px 26px 5px 10px"><option value="active"'+(c.status==='active'?' selected':'')+'>Active</option><option value="sample"'+(c.status==='sample'?' selected':'')+'>Sampling</option><option value="done"'+(c.status==='done'?' selected':'')+'>Done</option></select>';
+async function renderClientDetail(id){currentClientId=id;const c=clients.find(x=>String(x.id)===String(id));if(!c)return;const checks=await loadChecksData(id);const photos=listFilesData(id,'photos');const docs=listFilesData(id,'techpacks');const factoryInvs=getFactoryPayments(id);const quotes=getClientQuotes(id);const invoices=getClientInvoices(id);const el=document.getElementById('client-content');
+const statusSelect='<select class="btn btn-sm" onchange="updateStatus(\''+id+'\',this.value)" style="padding:5px 26px 5px 10px">'+statusOptionsHtml(c.status)+'</select>';
 el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0"><div class="panel-title" style="margin:0">'+c.brand+'</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">'+statusSelect+'<button class="btn btn-sm" onclick="openClientModal(\''+id+'\')">Edit</button><button class="btn btn-sm btn-danger" onclick="deleteClient(\''+id+'\')">Delete</button></div></div>'
 +'<div class="tabs"><button class="tab active" onclick="switchTab(this,\'ct-stats\')">Stats</button><button class="tab" onclick="switchTab(this,\'ct-info\')">Info</button><button class="tab" onclick="switchTab(this,\'ct-quotes\')">Quotes ('+quotes.length+')</button><button class="tab" onclick="switchTab(this,\'ct-invoices\')">Invoices ('+invoices.length+')</button><button class="tab" onclick="switchTab(this,\'ct-workflow\')">Workflow</button><button class="tab" onclick="switchTab(this,\'ct-photos\')">Photos ('+photos.length+')</button><button class="tab" onclick="switchTab(this,\'ct-docs\')">Tech packs</button><button class="tab" onclick="switchTab(this,\'ct-factinv\')">Factory invoices ('+factoryInvs.length+')</button></div>'
 +'<div id="ct-stats">'+renderClientStats(id)+'</div>'
@@ -1737,10 +1792,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +docs.map(f=>'<div class="file-item"><span class="file-icon">'+fileIcon(f.name)+'</span><span class="file-name">'+f.name+'</span><span class="file-size">'+formatSize(f.size)+'</span><button class="file-del" onclick="delDoc(\''+id+'\',\''+f.name+'\')">✕</button></div>').join('')
 +(!docs.length?'<div style="font-size:13px;color:var(--text3);text-align:center;padding:8px">No files yet</div>':'')
 +'</div></div></div>'
-+'<div id="ct-factinv" style="display:none"><div class="card"><div class="card-body"><div class="upload-zone" onclick="triggerFactoryInvUpload(\''+id+'\')"><div style="font-size:24px;margin-bottom:5px">🧾</div><div style="font-size:12px;color:var(--text3)">Upload factory invoices</div></div>'
-+factoryInvs.map(f=>'<div class="file-item"><span class="file-icon">'+fileIcon(f.name)+'</span><span class="file-name">'+f.name+'</span><span class="file-size">'+formatSize(f.size)+'</span><button class="file-del" onclick="delFactoryInv(\''+id+'\',\''+f.name+'\')">✕</button></div>').join('')
-+(!factoryInvs.length?'<div style="font-size:13px;color:var(--text3);text-align:center;padding:8px">No factory invoices yet</div>':'')
-+'</div></div></div>';}
++'<div id="ct-factinv" style="display:none">'+renderFactoryPaymentsSection(id)+'</div>';}
 
 function switchTab(btn,tabId){const container=btn.closest('#client-content');container.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');['ct-stats','ct-info','ct-quotes','ct-invoices','ct-workflow','ct-photos','ct-docs','ct-factinv'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=id===tabId?'block':'none';});}
 
@@ -1763,6 +1815,7 @@ const PHASES=[
   {name:'Bulk production',items:[
     {label:'Deposit invoice sent (50%)',upload:false},
     {label:'Deposit payment confirmed',upload:false},
+    {label:'Factory paid 50% — production deposit',upload:true,factoryPay:true},
     {label:'Fabric & trims ordered — update sent',upload:true},
     {label:'Bulk production started — update sent',upload:true},
     {label:'Mid-production photos sent to client',upload:true}
@@ -1771,6 +1824,7 @@ const PHASES=[
     {label:'QC completed — photos sent to client',upload:true},
     {label:'Final invoice sent (50% balance)',upload:false},
     {label:'Balance payment confirmed',upload:false},
+    {label:'Factory paid 50% — before dispatch',upload:true,factoryPay:true},
     {label:'Order packed & dispatched',upload:true},
     {label:'Tracking number sent to client',upload:false},
     {label:'Delivery confirmed with client',upload:false}
@@ -3176,7 +3230,7 @@ function generateWorkflowReport() {
   const el = document.getElementById('workflow-report-output');
   el.innerHTML = rows.map(r => {
     const pctColor = r.pct >= 75 ? 'var(--green)' : r.pct >= 40 ? 'var(--amber)' : 'var(--red)';
-    const statusLabel = r.c.status === 'active' ? 'Active' : r.c.status === 'sample' ? 'Sampling' : 'Done';
+    const wfStatusLabel = STATUS_LABELS[r.c.status] || 'Production';
     return `
     <div class="card" style="margin-bottom:14px">
       <div class="card-header" style="cursor:pointer" onclick="showPanel('client','${r.c.id}')">
@@ -3188,7 +3242,7 @@ function generateWorkflowReport() {
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:18px;font-weight:500;color:${pctColor}">${r.pct}%</div>
-            <span class="badge-xs badge-${r.c.status}">${statusLabel}</span>
+            <span class="badge-xs badge-${r.c.status}">${wfStatusLabel}</span>
           </div>
         </div>
       </div>
@@ -3709,7 +3763,7 @@ function renderClientsPanel() {
     el.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text3)"><div style="font-size:36px;opacity:0.35;margin-bottom:10px">🧵</div><p>'+(clients.length?'No clients match this filter':'No clients yet')+'</p><button class="btn btn-primary" style="margin-top:14px" onclick="openClientModal()">+ Add client</button></div>';
     return;
   }
-  el.innerHTML = filtered.map(c => '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'client\',\''+ c.id +'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+([c.contact,c.country,c.factoryId?('🏭 '+factoryName(c.factoryId)):''].filter(Boolean).join(' · ')||'—')+'</div></div><span class="badge-xs badge-'+c.status+'">'+(c.status==='active'?'Active':c.status==='sample'?'Sampling':'Done')+'</span></div>').join('');
+  el.innerHTML = filtered.map(c => '<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:0.5px solid var(--border);background:var(--surface)" onclick="showPanel(\'client\',\''+ c.id +'\')"><div class="avatar" style="width:40px;height:40px;font-size:14px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+([c.contact,c.country,c.factoryId?('🏭 '+factoryName(c.factoryId)):''].filter(Boolean).join(' · ')||'—')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('');
 }
 
 
@@ -3751,6 +3805,9 @@ async function restoreFromBackup(file) {
       });
       Object.keys(data.stepfiles || {}).forEach(cid => {
         lsSet('stepfiles_' + cid, data.stepfiles[cid]);
+      });
+      Object.keys(data.factorypayments || {}).forEach(cid => {
+        lsSet('factorypayments_' + cid, data.factorypayments[cid]);
       });
       
       // Restore global settings if backup has them
@@ -3894,6 +3951,185 @@ function resolveConfirm(answer) {
 }
 
 
+
+// ════════════════════════════════════════════════════════
+// FACTORY PAYMENTS (money OUT to factory — tracked per client, synced to factory)
+// Each record: {id, clientId, label, amount, currency, invoiceFile, proofFile, paid, paidDate, notes}
+// Stored under factorypayments_{clientId} in localStorage + Drive
+// ════════════════════════════════════════════════════════
+let activeFactoryPayClient = null;
+let activeFactoryPayId = null;
+let activeFactoryPayUploadKind = null; // 'invoice' or 'proof'
+
+function getFactoryPayments(clientId){
+  return lsGet('factorypayments_'+clientId, []);
+}
+function saveFactoryPayments(clientId, arr){
+  lsSet('factorypayments_'+clientId, arr);
+  if(driveConnected){
+    driveUploadJSON('factorypayments_'+clientId+'.json', arr)
+      .then(()=>setSyncStatus('synced'))
+      .catch(()=>{queueForSync('factorypayments_'+clientId+'.json');setSyncStatus('offline');});
+  }
+}
+
+// All factory payments across all clients linked to a given factory (for the factory profile view)
+function factoryPaymentsForFactory(factoryId){
+  const result = [];
+  clientsForFactory(factoryId).forEach(c => {
+    getFactoryPayments(c.id).forEach(p => {
+      result.push(Object.assign({}, p, { clientId:c.id, clientBrand:c.brand }));
+    });
+  });
+  return result;
+}
+
+function addFactoryPayment(clientId){
+  const arr = getFactoryPayments(clientId);
+  const rec = { id:Date.now(), label:'Factory invoice', amount:0, currency:'EUR', invoiceFile:null, proofFile:null, paid:false, paidDate:null, notes:'' };
+  arr.push(rec);
+  saveFactoryPayments(clientId, arr);
+  openFactoryPayModal(clientId, rec.id);
+}
+
+async function deleteFactoryPayment(clientId, payId){
+  const ok = await themedConfirm('Delete factory payment?','Remove this factory invoice record and its files permanently?','Delete','🗑️');
+  if(!ok) return;
+  let arr = getFactoryPayments(clientId);
+  arr = arr.filter(p => String(p.id) !== String(payId));
+  saveFactoryPayments(clientId, arr);
+  renderClientDetail(clientId);
+}
+
+function openFactoryPayModal(clientId, payId){
+  activeFactoryPayClient = clientId;
+  activeFactoryPayId = payId;
+  const arr = getFactoryPayments(clientId);
+  const p = arr.find(x => String(x.id)===String(payId));
+  if(!p) return;
+  const c = clients.find(x => String(x.id)===String(clientId));
+  document.getElementById('fpay-label').value = p.label || '';
+  document.getElementById('fpay-amount').value = p.amount || '';
+  document.getElementById('fpay-currency').value = p.currency || (c?.currency) || 'EUR';
+  document.getElementById('fpay-notes').value = p.notes || '';
+  renderFactoryPayModalFiles();
+  document.getElementById('factory-pay-modal').classList.add('open');
+}
+
+function renderFactoryPayModalFiles(){
+  const arr = getFactoryPayments(activeFactoryPayClient);
+  const p = arr.find(x => String(x.id)===String(activeFactoryPayId));
+  if(!p) return;
+  const invEl = document.getElementById('fpay-invoice-area');
+  const proofEl = document.getElementById('fpay-proof-area');
+  if(p.invoiceFile){
+    invEl.innerHTML = '<div class="file-chip"><span>'+fileIcon(p.invoiceFile.name)+'</span><a href="'+p.invoiceFile.data+'" download="'+p.invoiceFile.name+'" style="color:var(--text);text-decoration:none;flex:1">'+p.invoiceFile.name+'</a><span class="file-chip-del" onclick="removeFactoryPayFile(\'invoice\')">✕</span></div>';
+  } else {
+    invEl.innerHTML = '<button class="btn btn-sm" onclick="triggerFactoryPayUpload(\'invoice\')" style="width:100%">🧾 Upload factory invoice</button>';
+  }
+  if(p.proofFile){
+    proofEl.innerHTML = '<div class="file-chip"><span>'+fileIcon(p.proofFile.name)+'</span><a href="'+p.proofFile.data+'" download="'+p.proofFile.name+'" style="color:var(--text);text-decoration:none;flex:1">'+p.proofFile.name+'</a><span class="file-chip-del" onclick="removeFactoryPayFile(\'proof\')">✕</span></div>';
+  } else {
+    proofEl.innerHTML = '<button class="btn btn-sm" onclick="triggerFactoryPayUpload(\'proof\')" style="width:100%">📎 Upload proof of payment</button>';
+  }
+  // Paid toggle
+  const paidBtn = document.getElementById('fpay-paid-btn');
+  if(paidBtn){
+    paidBtn.textContent = p.paid ? '✓ Paid to factory'+(p.paidDate?' — '+fmtDate(p.paidDate):'') : 'Mark as paid to factory';
+    paidBtn.style.background = p.paid ? 'var(--green)' : 'var(--surface3)';
+    paidBtn.style.color = p.paid ? '#fff' : 'var(--text)';
+  }
+}
+
+function triggerFactoryPayUpload(kind){
+  activeFactoryPayUploadKind = kind;
+  document.getElementById('factory-pay-file-input').click();
+}
+
+async function handleFactoryPayFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const du = await readAsDataUrl(file);
+  const nm = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+  const arr = getFactoryPayments(activeFactoryPayClient);
+  const p = arr.find(x => String(x.id)===String(activeFactoryPayId));
+  if(!p) return;
+  if(activeFactoryPayUploadKind === 'invoice') p.invoiceFile = { name:nm, size:file.size, data:du };
+  else p.proofFile = { name:nm, size:file.size, data:du };
+  saveFactoryPayments(activeFactoryPayClient, arr);
+  e.target.value = '';
+  renderFactoryPayModalFiles();
+}
+
+function removeFactoryPayFile(kind){
+  const arr = getFactoryPayments(activeFactoryPayClient);
+  const p = arr.find(x => String(x.id)===String(activeFactoryPayId));
+  if(!p) return;
+  if(kind === 'invoice') p.invoiceFile = null;
+  else p.proofFile = null;
+  saveFactoryPayments(activeFactoryPayClient, arr);
+  renderFactoryPayModalFiles();
+}
+
+function toggleFactoryPaid(){
+  const arr = getFactoryPayments(activeFactoryPayClient);
+  const p = arr.find(x => String(x.id)===String(activeFactoryPayId));
+  if(!p) return;
+  p.paid = !p.paid;
+  p.paidDate = p.paid ? new Date().toISOString().split('T')[0] : null;
+  saveFactoryPayments(activeFactoryPayClient, arr);
+  renderFactoryPayModalFiles();
+}
+
+function saveFactoryPayDetails(){
+  const arr = getFactoryPayments(activeFactoryPayClient);
+  const p = arr.find(x => String(x.id)===String(activeFactoryPayId));
+  if(!p) return;
+  p.label = document.getElementById('fpay-label').value.trim() || 'Factory invoice';
+  p.amount = parseNum(document.getElementById('fpay-amount').value, 0);
+  p.currency = document.getElementById('fpay-currency').value;
+  p.notes = document.getElementById('fpay-notes').value.trim();
+  saveFactoryPayments(activeFactoryPayClient, arr);
+  closeModal('factory-pay-modal');
+  renderClientDetail(activeFactoryPayClient);
+}
+
+function renderFactoryPaymentsSection(clientId){
+  const arr = getFactoryPayments(clientId);
+  let html = '<div class="card"><div class="card-body">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:13px;color:var(--text3)">Track invoices the factory sends you and your payments to them</span><button class="btn btn-sm btn-primary" onclick="addFactoryPayment(\''+clientId+'\')">+ Add</button></div>';
+  if(!arr.length){
+    html += '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No factory invoices yet</div>';
+  } else {
+    arr.forEach(p => {
+      const paidBadge = p.paid ? '<span class="badge-xs badge-active">Paid</span>' : '<span class="badge-xs badge-sample">Unpaid</span>';
+      const amt = p.amount ? fmtMoney(p.amount, p.currency||'EUR') : '—';
+      const hasInv = p.invoiceFile ? '🧾' : '';
+      const hasProof = p.proofFile ? '📎' : '';
+      html += '<div onclick="openFactoryPayModal(\''+clientId+'\',\''+p.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px;border:0.5px solid var(--border2);border-radius:8px;margin-bottom:8px;cursor:pointer">';
+      html += '<div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px">'+p.label+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+amt+' '+hasInv+' '+hasProof+'</div></div>';
+      html += paidBadge;
+      html += '<button class="btn btn-xs" style="color:var(--red)" onclick="event.stopPropagation();deleteFactoryPayment(\''+clientId+'\',\''+p.id+'\')">✕</button>';
+      html += '</div>';
+    });
+    // Summary
+    const totalDue = arr.filter(p=>!p.paid).reduce((a,p)=>a+(p.amount||0),0);
+    const totalPaid = arr.filter(p=>p.paid).reduce((a,p)=>a+(p.amount||0),0);
+    html += '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:0.5px solid var(--border2);font-size:13px"><span style="color:var(--text3)">Paid to factory: <strong style="color:var(--green)">'+fmtMoney(totalPaid,arr[0]?.currency||'EUR')+'</strong></span><span style="color:var(--text3)">Still owed: <strong style="color:var(--amber)">'+fmtMoney(totalDue,arr[0]?.currency||'EUR')+'</strong></span></div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+// CLIENT STATUS LABELS (display only — internal values unchanged for data safety)
+// active = Production, sample = Sampling, done = Completed, prospect = Prospect, hold = On Hold
+const STATUS_LABELS = { prospect:'Prospect', sample:'Sampling', active:'Production', hold:'On Hold', done:'Completed' };
+const STATUS_ORDER = ['prospect','sample','active','hold','done'];
+function statusLabel(s){ return STATUS_LABELS[s] || 'Production'; }
+function statusBadgeClass(s){ return 'badge-' + (s || 'active'); }
+function statusOptionsHtml(selected){
+  return STATUS_ORDER.map(s => '<option value="'+s+'"'+((selected||'active')===s?' selected':'')+'>'+STATUS_LABELS[s]+'</option>').join('');
+}
 
 // ════════════════════════════════════════════════════════
 // FACTORY DATA LAYER
