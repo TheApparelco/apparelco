@@ -1354,6 +1354,175 @@ function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-
 function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}if(name==='metrics'){renderMetricsPanel();}if(name==='factory'&&clientId){const el=document.getElementById('fn-'+clientId);if(el)el.classList.add('active');renderFactoryDetail(clientId);}}
 
 // DASHBOARD
+// ════════════════════════════════════════════════════════
+// NEEDS ATTENTION — proactive alerts across all clients
+// ════════════════════════════════════════════════════════
+const ATTENTION_THRESHOLDS = {
+  quoteCold: 7,        // quote sent, no response after N days
+  overdueGrace: 3,     // invoice overdue by N days beyond due date
+  sampleApproval: 5,   // sample sent but not approved after N days
+  samplePayment: 5,    // sample invoice sent, unpaid after N days
+  depositPayment: 5,   // deposit invoice sent, unpaid after N days
+  balancePayment: 5,   // balance invoice sent, unpaid after N days
+  prospectCold: 14,    // prospect with no quote sent after N days
+  onHoldTooLong: 30,   // on hold longer than N days
+  factoryUnpaid: 3,    // production started but factory not paid after N days
+  midProduction: 10    // bulk started but no mid-production photos after N days
+};
+
+function daysSince(dateStr){
+  if(!dateStr) return null;
+  const t = new Date(dateStr).getTime();
+  if(isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function calcNeedsAttention(){
+  const alerts = [];
+  const T = ATTENTION_THRESHOLDS;
+  const now = Date.now();
+  // Build used-quote set for accuracy
+  const usedQ = new Set();
+  clients.forEach(c => lsGet('invoices_'+c.id,[]).forEach(inv=>{
+    if(inv.fromQuote) usedQ.add(inv.fromQuote);
+    if(inv.fromQuotes) inv.fromQuotes.split(',').forEach(qn=>usedQ.add(qn.trim()));
+  }));
+
+  clients.forEach(c => {
+    const invoices = lsGet('invoices_'+c.id, []);
+    const quotes = lsGet('quotes_'+c.id, []);
+    const checks = lsGet('checks_'+c.id, {});
+    const cd = lsGet('checkdates_'+c.id, {});
+    const cur = c.currency || 'EUR';
+    const isPaid = inv => (inv.amountPaid||0) >= (inv.amountDue!=null?inv.amountDue:(inv.totalClient||0));
+
+    // 1. Quotes going cold (pending, sent > N days ago, not invoiced)
+    quotes.forEach(q => {
+      if(q.isSample) return;
+      if(q.status === 'accepted' || q.status === 'rejected') return;
+      if(usedQ.has(q.number)) return;
+      const d = daysSince(q.date);
+      if(d != null && d >= T.quoteCold){
+        alerts.push({cid:c.id, brand:c.brand, type:'quote', priority:2,
+          icon:'📋', text:'Quote '+q.number+' — no response in '+d+' days', amount:q.totalClient, cur});
+      }
+    });
+
+    // 2. Overdue invoices (production)
+    invoices.forEach(inv => {
+      if(inv.isSample) return;
+      if(isPaid(inv)) return;
+      if(!inv.date) return;
+      const dueDays = parseInt(inv.due) || 14;
+      const overdueDays = Math.floor((now - (new Date(inv.date).getTime() + (dueDays+1)*86400000)) / 86400000);
+      if(overdueDays >= T.overdueGrace){
+        const owed = (inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)) - (inv.amountPaid||0);
+        alerts.push({cid:c.id, brand:c.brand, type:'overdue', priority:1,
+          icon:'🔴', text:'Invoice '+inv.number+' overdue '+overdueDays+' days', amount:owed, cur});
+      }
+    });
+
+    // Workflow-based alerts — only if step ticked but next not
+    const ticked = k => !!checks[k];
+    const tickDate = k => cd[k];
+
+    // 3. Sample sent but not approved
+    if(ticked('Sampling|Sample shipped to client') && !ticked('Sampling|Sample approved by client')){
+      const d = daysSince(tickDate('Sampling|Sample shipped to client'));
+      if(d != null && d >= T.sampleApproval){
+        alerts.push({cid:c.id, brand:c.brand, type:'sample-approval', priority:2,
+          icon:'🧵', text:'Sample shipped '+d+' days ago — not approved yet'});
+      }
+    }
+
+    // 4. Sample invoice sent, payment not confirmed
+    if(ticked('Onboarding|Sample invoice sent') && !ticked('Onboarding|Sample payment confirmed')){
+      const d = daysSince(tickDate('Onboarding|Sample invoice sent'));
+      if(d != null && d >= T.samplePayment){
+        alerts.push({cid:c.id, brand:c.brand, type:'sample-payment', priority:2,
+          icon:'💵', text:'Sample invoice sent '+d+' days ago — unpaid'});
+      }
+    }
+
+    // 5. Deposit invoice sent, not confirmed
+    if(ticked('Bulk production|Deposit invoice sent (50%)') && !ticked('Bulk production|Deposit payment confirmed')){
+      const d = daysSince(tickDate('Bulk production|Deposit invoice sent (50%)'));
+      if(d != null && d >= T.depositPayment){
+        alerts.push({cid:c.id, brand:c.brand, type:'deposit', priority:1,
+          icon:'⚠️', text:'Deposit invoice sent '+d+' days ago — blocking production'});
+      }
+    }
+
+    // 6. Balance invoice sent + dispatched, balance not confirmed
+    if(ticked('QC & dispatch|Final invoice sent (50% balance)') && !ticked('QC & dispatch|Balance payment confirmed')){
+      const dispatched = ticked('QC & dispatch|Order packed & dispatched');
+      const d = daysSince(tickDate('QC & dispatch|Final invoice sent (50% balance)'));
+      if(d != null && d >= T.balancePayment){
+        alerts.push({cid:c.id, brand:c.brand, type:'balance', priority:1,
+          icon: dispatched?'🔴':'💰',
+          text: dispatched ? 'Order dispatched — balance unpaid '+d+' days (risk!)' : 'Balance invoice sent '+d+' days ago — unpaid'});
+      }
+    }
+
+    // 7. Prospect going cold (no quote sent)
+    if((c.status||'active') === 'prospect'){
+      const anyQuote = quotes.length > 0;
+      if(!anyQuote){
+        // Use the earliest signal we have; fall back to flagging generally
+        alerts.push({cid:c.id, brand:c.brand, type:'prospect', priority:3,
+          icon:'◇', text:'Prospect — no quote sent yet'});
+      }
+    }
+
+    // 8. On hold too long — based on most recent workflow date or just flag
+    if((c.status||'active') === 'hold'){
+      alerts.push({cid:c.id, brand:c.brand, type:'hold', priority:3,
+        icon:'⏸', text:'On hold — check if still active'});
+    }
+
+    // 9. Factory not paid before production
+    if(ticked('Bulk production|Bulk production started — update sent') && !ticked('Bulk production|Factory paid 50% — production deposit')){
+      const d = daysSince(tickDate('Bulk production|Bulk production started — update sent'));
+      if(d != null && d >= T.factoryUnpaid){
+        alerts.push({cid:c.id, brand:c.brand, type:'factory-unpaid', priority:1,
+          icon:'🏭', text:'Production started '+d+' days ago — factory deposit not marked paid'});
+      }
+    }
+
+    // 10. Mid-production photos overdue
+    if(ticked('Bulk production|Bulk production started — update sent') && !ticked('Bulk production|Mid-production photos sent to client')){
+      const d = daysSince(tickDate('Bulk production|Bulk production started — update sent'));
+      if(d != null && d >= T.midProduction){
+        alerts.push({cid:c.id, brand:c.brand, type:'mid-prod', priority:3,
+          icon:'📸', text:'Bulk started '+d+' days ago — no mid-production update'});
+      }
+    }
+  });
+
+  // Sort by priority (1 = most urgent)
+  alerts.sort((a,b)=>a.priority-b.priority);
+  return alerts;
+}
+
+function renderNeedsAttention(){
+  const alerts = calcNeedsAttention();
+  if(!alerts.length){
+    return '<div class="card" style="margin-bottom:14px"><div class="card-body" style="display:flex;align-items:center;gap:10px;padding:14px"><span style="font-size:18px">✅</span><span style="font-size:14px;color:var(--text2)">All clear — nothing needs your attention right now.</span></div></div>';
+  }
+  let html = '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">⚡ Needs attention</span><span class="badge-xs" style="background:var(--red);color:#fff">'+alerts.length+'</span></div><div class="card-body" style="padding:6px 0">';
+  alerts.forEach(a => {
+    const amt = a.amount ? ' · <strong style="color:var(--amber)">'+fmtMoney(a.amount, a.cur||'EUR')+'</strong>' : '';
+    const pColor = a.priority===1 ? 'var(--red)' : a.priority===2 ? 'var(--amber)' : 'var(--text3)';
+    html += '<div onclick="showPanel(\'client\',\''+a.cid+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-left:2px solid '+pColor+';transition:background 0.1s" onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'transparent\'">';
+    html += '<span style="font-size:15px;flex-shrink:0">'+a.icon+'</span>';
+    html += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">'+a.brand+'</div><div style="font-size:12px;color:var(--text3)">'+a.text+amt+'</div></div>';
+    html += '<span style="color:var(--text3);font-size:14px;flex-shrink:0">›</span>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
 function renderDashboard(){
   const el=document.getElementById('dashboard-content');
   const filterVal = document.getElementById('dashboard-filter')?.value || 'all';
@@ -1388,7 +1557,7 @@ clients.forEach(c=>{
       totPipeline += (q.totalClient || 0);
     }
   });
-});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div><div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('')+'</div></div>';
+});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div>'+renderNeedsAttention()+'<div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('')+'</div></div>';
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
@@ -4460,8 +4629,6 @@ function calcBusinessMetrics(periodDays) {
         clientPaid += paid;
         totalOutstanding += Math.max(0, due - paid);
         if (paid > 0 && fullTotal > 0) totalProfit += fullProfit * (paid / fullTotal);
-        if (fullTotal > 0) allOrderValues.push(fullTotal);
-        
         if (isPaid) {
           invoicesPaidCount++;
           // Days to payment (using last payment date vs invoice date)
@@ -4509,6 +4676,7 @@ function calcBusinessMetrics(periodDays) {
         quotesSent++;
         if (q.status === 'accepted') {
           quotesAccepted++;
+          if ((q.totalClient || 0) > 0) allOrderValues.push(q.totalClient);
           if (!usedQuoteNumbers.has(q.number)) {
             pipelineValue += (q.totalClient || 0);
             acceptedQuotesCount++;
@@ -4591,7 +4759,7 @@ function renderMetricsPanel() {
   
   // BUSINESS HEALTH
   html += '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">🏥 Business health</span><span style="font-size:11px;color:var(--text3)">' + periodLabel + '</span></div><div class="card-body"><div class="stat-grid stat-grid-3">';
-  html += stat('Avg order value', fmt(m.avgOrderValue), 'var(--text)', 'per invoice');
+  html += stat('Avg order value', fmt(m.avgOrderValue), 'var(--text)', 'per order');
   html += stat('Repeat client rate', m.repeatRate != null ? m.repeatRate + '%' : '—', 'var(--accent)', 'clients with 2+ orders');
   html += stat('Top 3 share', m.top3Share > 0 ? m.top3Share + '%' : '—', m.top3Share > 70 ? 'var(--red)' : m.top3Share > 50 ? 'var(--amber)' : 'var(--green)', 'concentration risk');
   html += '</div>';
