@@ -2922,8 +2922,8 @@ function downloadCurrentInvoiceHTML() {
 // Helper: filter clients by status including payment-based filters
 function filterClientsByStatus(arr, filter) {
   if (filter === 'all') return arr;
-  if (filter === 'active' || filter === 'sample' || filter === 'done') {
-    return arr.filter(c => c.status === filter);
+  if (filter === 'active' || filter === 'sample' || filter === 'done' || filter === 'prospect' || filter === 'hold') {
+    return arr.filter(c => (c.status || 'active') === filter);
   }
   // Helper: check if an invoice is fully paid (using amountDue for deposit/balance, totalClient for full)
   const isInvoicePaid = inv => {
@@ -2956,7 +2956,7 @@ function filterClientsByStatus(arr, filter) {
         if (isInvoicePaid(inv)) return false;
         if (!inv.date) return false;
         const dueDays = parseInt(inv.due) || 14;
-        const dueTime = new Date(inv.date).getTime() + dueDays * 86400000;
+        const dueTime = new Date(inv.date).getTime() + (dueDays+1) * 86400000;
         return now > dueTime;
       });
     });
@@ -3986,7 +3986,10 @@ function factoryPaymentsForFactory(factoryId){
 
 function addFactoryPayment(clientId){
   const arr = getFactoryPayments(clientId);
-  const rec = { id:Date.now(), label:'Factory invoice', amount:0, currency:'EUR', invoiceFile:null, proofFile:null, paid:false, paidDate:null, notes:'' };
+  // Guarantee unique id even if added within the same millisecond
+  let newId = Date.now();
+  while(arr.some(p => String(p.id) === String(newId))) newId++;
+  const rec = { id:newId, label:'Factory invoice', amount:0, currency:'EUR', invoiceFile:null, proofFile:null, paid:false, paidDate:null, notes:'' };
   arr.push(rec);
   saveFactoryPayments(clientId, arr);
   openFactoryPayModal(clientId, rec.id);
@@ -3998,7 +4001,7 @@ async function deleteFactoryPayment(clientId, payId){
   let arr = getFactoryPayments(clientId);
   arr = arr.filter(p => String(p.id) !== String(payId));
   saveFactoryPayments(clientId, arr);
-  renderClientDetail(clientId);
+  refreshFactoryPaymentsTab(clientId);
 }
 
 function openFactoryPayModal(clientId, payId){
@@ -4091,9 +4094,13 @@ function saveFactoryPayDetails(){
   p.notes = document.getElementById('fpay-notes').value.trim();
   saveFactoryPayments(activeFactoryPayClient, arr);
   closeModal('factory-pay-modal');
-  renderClientDetail(activeFactoryPayClient);
+  refreshFactoryPaymentsTab(activeFactoryPayClient);
 }
 
+function refreshFactoryPaymentsTab(clientId){
+  const el = document.getElementById('ct-factinv');
+  if(el) el.innerHTML = renderFactoryPaymentsSection(clientId);
+}
 function renderFactoryPaymentsSection(clientId){
   const arr = getFactoryPayments(clientId);
   let html = '<div class="card"><div class="card-body">';
@@ -4441,7 +4448,7 @@ function calcBusinessMetrics(periodDays) {
         if (paid > 0 && fullTotal > 0) totalSampleProfit += fullProfit * (paid / fullTotal);
         // Sample overdue — tracked separately
         if (!isPaid && inv.date) {
-          const dueDate = new Date(new Date(inv.date).getTime() + (parseInt(inv.due)||14) * 86400000);
+          const dueDate = new Date(new Date(inv.date).getTime() + ((parseInt(inv.due)||14)+1) * 86400000);
           if (nowMs > dueDate.getTime()) {
             sampleOverdueAmount += Math.max(0, due - paid);
             sampleOverdueCount++;
@@ -4472,7 +4479,7 @@ function calcBusinessMetrics(periodDays) {
           invoicesUnpaidCount++;
           // Overdue check
           if (inv.date) {
-            const dueDate = new Date(new Date(inv.date).getTime() + (parseInt(inv.due)||14) * 86400000);
+            const dueDate = new Date(new Date(inv.date).getTime() + ((parseInt(inv.due)||14)+1) * 86400000);
             if (nowMs > dueDate.getTime()) {
               overdueAmount += Math.max(0, due - paid);
               overdueCount++;
