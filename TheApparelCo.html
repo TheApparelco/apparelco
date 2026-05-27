@@ -312,6 +312,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .mobile-nav{display:none}
 @media print{.app,.sidebar,.titlebar,.tabs,.btn,.overlay,.slideshow,.connect-screen,.toast{display:none!important}.doc-white{display:block!important;padding:0;margin:0;border-radius:0;max-width:100%}}
 </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -2481,18 +2483,67 @@ filtered.forEach(c=>{
   const sampleInvs = allInvs.filter(inv => inv.isSample);
   const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0);
   const factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0);
-  const profit=invs.reduce((a,inv)=>a+(inv.profit||0),0);
+  // Realized profit only — scale each invoice's profit by how much has actually been paid
+  const profit=invs.reduce((a,inv)=>{
+    const ft=inv.totalClient||0, pd=inv.amountPaid||0, pr=inv.profit||0;
+    return a + (pd>0 && ft>0 ? pr*(pd/ft) : 0);
+  },0);
   const paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);
-  const outstanding=revenue-paid;
-  const sampleRevenue = sampleInvs.reduce((a,inv)=>a+(inv.totalClient||0),0);
-  const sampleProfit = sampleInvs.reduce((a,inv)=>a+(inv.profit||0),0);
+  const outstanding=invs.reduce((a,inv)=>{const due=inv.amountDue!=null?inv.amountDue:(inv.totalClient||0);return a+Math.max(0,due-(inv.amountPaid||0));},0);
+  const sampleRevenue = sampleInvs.reduce((a,inv)=>a+(inv.amountPaid||0),0);
+  const sampleProfit = sampleInvs.reduce((a,inv)=>{
+    const ft=inv.totalClient||0, pd=inv.amountPaid||0, pr=inv.profit||0;
+    return a + (pd>0 && ft>0 ? pr*(pd/ft) : 0);
+  },0);
   const rConv=v=>toReportingCurrency(v,c.currency||'EUR');totR+=rConv(revenue);totF+=rConv(factory);totP+=rConv(profit);totPaid+=rConv(paid);totOut+=rConv(outstanding);totSampleR+=rConv(sampleRevenue);
   rows.push({id:c.id,brand:c.brand,country:c.country||'—',currency:c.currency||'EUR',invoices:invs.length,sampleInvoices:sampleInvs.length,revenue,factory,profit,paid,outstanding,sampleRevenue,sampleProfit,status:c.status});
-});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}const repSym=sym(getReportingCurrency());el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Production revenue</div><div class="stat-val green">'+repSym+totR.toFixed(0)+'</div></div>'+(totSampleR>0?'<div class="stat"><div class="stat-label">Sample revenue</div><div class="stat-val" style="color:#c4a572">'+repSym+totSampleR.toFixed(0)+'</div></div>':'')+'<div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">'+repSym+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">'+repSym+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">'+repSym+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Revenue</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500"><span onclick="showPanel(\'client\',\''+r.id+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px">'+r.brand+'</span></td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+r.status+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
-function exportReport(format){const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);let filtered=filterClientsByStatus(clients, sf);const rows=[];filtered.forEach(c=>{const invs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0),factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0),profit=invs.reduce((a,inv)=>a+(inv.profit||0),0),paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);rows.push({Brand:c.brand,Country:c.country||'',Status:c.status,Currency:c.currency||'EUR',Invoices:invs.length,Revenue:revenue.toFixed(2),FactoryCost:factory.toFixed(2),Profit:profit.toFixed(2),Paid:paid.toFixed(2),Outstanding:(revenue-paid).toFixed(2)});});if(!rows.length){showToast('No data to export');return;}if(format==='csv'){const headers=Object.keys(rows[0]);const csv=[headers.join(','),...rows.map(r=>headers.map(h=>'"'+(r[h]||'')+'"').join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.csv';a.click();URL.revokeObjectURL(url);showToast('CSV exported ✓');}else{const headers=Object.keys(rows[0]);const content='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>The Apparel Co Report</title><style>body{font-family:sans-serif;padding:32px;color:#111}h1{font-family:serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 6px;border-bottom:1px solid #eee}tfoot td{font-weight:600;border-top:2px solid #ddd;padding-top:12px}</style></head><body><h1>The Apparel Co — Report</h1><p>Period: '+(from||'All time')+' to '+(to||today())+' · Filter: '+sf+'</p><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+headers.map(h=>'<td>'+(r[h]||'')+'</td>').join('')+'</tr>').join('')+'</tbody><tfoot><tr><td colspan="5">TOTAL</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Revenue),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.FactoryCost),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Profit),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Paid),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Outstanding),0).toFixed(2)+'</td></tr></tfoot></table></body></html>';const blob=new Blob([content],{type:'text/html'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.html';a.click();URL.revokeObjectURL(url);showToast('Report exported — open file and Print → Save as PDF ✓');}}
-
-
-// SETTINGS — LOGO
+});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}const repSym=sym(getReportingCurrency());el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Invoiced (production)</div><div class="stat-val green">'+repSym+totR.toFixed(0)+'</div></div>'+(totSampleR>0?'<div class="stat"><div class="stat-label">Sample revenue</div><div class="stat-val" style="color:#c4a572">'+repSym+totSampleR.toFixed(0)+'</div></div>':'')+'<div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">'+repSym+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">'+repSym+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">'+repSym+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Invoiced</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit (realized)</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500"><span onclick="showPanel(\'client\',\''+r.id+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px">'+r.brand+'</span></td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+statusLabel(r.status)+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
+function exportReport(format){
+  const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;
+  const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);
+  let filtered=filterClientsByStatus(clients, sf);
+  const rows=[];
+  filtered.forEach(c=>{
+    const allInvs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});
+    const invs=allInvs.filter(inv=>!inv.isSample);
+    const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0);
+    const factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0);
+    // Realized profit only — scaled by amount actually paid
+    const profit=invs.reduce((a,inv)=>{const ft=inv.totalClient||0,pd=inv.amountPaid||0,pr=inv.profit||0;return a+(pd>0&&ft>0?pr*(pd/ft):0);},0);
+    const paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);
+    const outstanding=invs.reduce((a,inv)=>{const due=inv.amountDue!=null?inv.amountDue:(inv.totalClient||0);return a+Math.max(0,due-(inv.amountPaid||0));},0);
+    if(invs.length===0) return;
+    rows.push({Brand:c.brand,Country:c.country||'',Status:statusLabel(c.status),Currency:c.currency||'EUR',Invoices:invs.length,Revenue:revenue.toFixed(2),FactoryCost:factory.toFixed(2),Profit:profit.toFixed(2),Paid:paid.toFixed(2),Outstanding:outstanding.toFixed(2)});
+  });
+  if(!rows.length){showToast('No data to export');return;}
+  if(format==='csv'){
+    const headers=Object.keys(rows[0]);
+    const csv=[headers.join(','),...rows.map(r=>headers.map(h=>'"'+(r[h]||'')+'"').join(','))].join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.csv';a.click();URL.revokeObjectURL(url);
+    showToast('CSV exported \u2713');
+  } else {
+    const headers=Object.keys(rows[0]);
+    const num=h=>['Revenue','FactoryCost','Profit','Paid','Outstanding'].includes(h);
+    const tot=h=>rows.reduce((a,r)=>a+parseFloat(r[h]||0),0).toFixed(2);
+    const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>The Apparel Co Report</title>'
+      +'<style>body{font-family:-apple-system,sans-serif;padding:32px;color:#111}h1{font-family:Georgia,serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 6px;border-bottom:1px solid #eee}tfoot td{font-weight:600;border-top:2px solid #ddd;padding-top:12px}@media print{body{padding:0}}</style></head><body>'
+      +'<h1>The Apparel Co \u2014 Report</h1>'
+      +'<p>Period: '+(from||'All time')+' to '+(to||today())+' \u00b7 Filter: '+sf+' \u00b7 Profit shown is realized (paid only)</p>'
+      +'<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead>'
+      +'<tbody>'+rows.map(r=>'<tr>'+headers.map(h=>'<td>'+(r[h]||'')+'</td>').join('')+'</tr>').join('')+'</tbody>'
+      +'<tfoot><tr>'+headers.map((h,i)=>{if(i===0)return '<td>TOTAL</td>';if(num(h))return '<td>'+tot(h)+'</td>';return '<td></td>';}).join('')+'</tr></tfoot>'
+      +'</table>'
+      +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr'+'ipt>'
+      +'</body></html>';
+    if(format==='pdf'){
+      htmlToPdf(html, 'TheApparelCo_Report_'+today()+'.pdf');
+    } else {
+      const cleanHtml=html.replace(/<scr'+'ipt>[\s\S]*?<\/scr'+'ipt>/g,'').replace(/<script>[\s\S]*?<\/script>/g,'');
+      downloadAsHtml('TheApparelCo_Report_'+today()+'.html', cleanHtml);
+    }
+  }
+}
 function handleLogoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -2718,6 +2769,65 @@ function downloadAsHtml(filename, htmlContent) {
   URL.revokeObjectURL(url);
 }
 
+
+// ════════════════════════════════════════════════════════
+// PDF GENERATION — true one-click PDF download (jsPDF + html2canvas)
+// Falls back to print dialog if libraries unavailable (offline)
+// ════════════════════════════════════════════════════════
+async function htmlToPdf(htmlContent, filename){
+  // Strip any auto-print script from the HTML
+  const clean = htmlContent.replace(/<scr'?\+?'?ipt>[\s\S]*?<\/scr'?\+?'?ipt>/gi, '').replace(/<script>[\s\S]*?<\/script>/gi, '');
+  // If libraries didn't load (e.g. offline), fall back to print
+  if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
+    openForPrint(htmlContent);
+    showToast('Tip: choose "Save as PDF" in the print dialog');
+    return;
+  }
+  try {
+    showToast('Generating PDF…');
+    // Render the HTML into a hidden container
+    const holder = document.createElement('div');
+    holder.style.position = 'fixed';
+    holder.style.left = '-9999px';
+    holder.style.top = '0';
+    holder.style.width = '794px'; // A4 width at 96dpi
+    holder.style.background = '#fff';
+    // Extract body content
+    const bodyMatch = clean.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const styleMatch = clean.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    const inner = bodyMatch ? bodyMatch[1] : clean;
+    holder.innerHTML = (styleMatch ? '<style>'+styleMatch[1]+'</style>' : '') + '<div style="padding:32px;background:#fff;color:#111">' + inner + '</div>';
+    document.body.appendChild(holder);
+
+    const canvas = await html2canvas(holder, { scale: 2, backgroundColor: '#ffffff', logging: false });
+    document.body.removeChild(holder);
+
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageW = 210, pageH = 297;
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    let heightLeft = imgH;
+    let position = 0;
+    pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+    // Multi-page if content taller than one page
+    while (heightLeft > 0) {
+      position -= pageH;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+    }
+    pdf.save(filename);
+    showToast('PDF downloaded \u2713');
+  } catch(e) {
+    console.error('PDF generation failed', e);
+    openForPrint(htmlContent);
+    showToast('Tip: choose "Save as PDF" in the print dialog');
+  }
+}
+
 function openForPrint(htmlContent) {
   const w = window.open('', '_blank');
   if (!w) { showToast('Pop-up blocked — allow pop-ups to print'); return; }
@@ -2763,7 +2873,8 @@ function renderQuoteDoc(clientId, idx) {
 function downloadQuotePDF(clientId, idx) {
   const html = renderQuoteDoc(clientId, idx);
   if (!html) return;
-  openForPrint(html);
+  const q = getClientQuotes(clientId)[idx];
+  htmlToPdf(html, 'Quote_'+(q?q.number:'Q')+'.pdf');
 }
 function downloadQuoteHTML(clientId, idx) {
   const html = renderQuoteDoc(clientId, idx);
@@ -2828,7 +2939,8 @@ function renderInvoiceDoc(clientId, idx) {
 function downloadInvoicePDF(clientId, idx) {
   const html = renderInvoiceDoc(clientId, idx);
   if (!html) return;
-  openForPrint(html);
+  const inv = getClientInvoices(clientId)[idx];
+  htmlToPdf(html, 'Invoice_'+(inv?inv.number:'TAC')+'.pdf');
 }
 function downloadInvoiceHTML(clientId, idx) {
   const html = renderInvoiceDoc(clientId, idx);
@@ -3155,7 +3267,7 @@ function renderCurrentInvoiceDoc() {
 
 function downloadCurrentInvoicePDF() {
   const r = renderCurrentInvoiceDoc(); if (!r) return;
-  openForPrint(r.html);
+  htmlToPdf(r.html, 'Invoice_'+(r.num||'TAC')+'.pdf');
 }
 function downloadCurrentInvoiceHTML() {
   const r = renderCurrentInvoiceDoc(); if (!r) return;
@@ -3596,12 +3708,7 @@ function exportWorkflowReport() {
   }).join('')}
   </body></html>`;
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'ApparelCo_Progress_' + today() + '.html'; a.click();
-  URL.revokeObjectURL(url);
-  showToast('Progress report exported — open and Print → Save as PDF ✓');
+  htmlToPdf(html, 'TheApparelCo_Progress_'+today()+'.pdf');
 }
 
 // THEMED CONFIRM DIALOG
@@ -3776,13 +3883,12 @@ function exportTaxReport(format) {
     + rows.map(r => '<tr><td>' + r.paidDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + '</td><td>' + r.clientName + '</td><td>' + r.invNumber + '</td><td>' + r.invType + '</td><td class="right">' + fmtMoney(r.amountPaid, r.currency) + '</td><td class="right green">' + fmtMoney(r.profit, r.currency) + '</td><td class="right amber">' + fmtMoney(r.tax, r.currency) + '</td></tr>').join('')
     + '</tbody><tfoot><tr><td colspan="4">TOTAL</td><td class="right">€' + totalPaid.toFixed(2) + '</td><td class="right green">€' + totalProfit.toFixed(2) + '</td><td class="right amber">€' + totalTax.toFixed(2) + '</td></tr></tfoot></table>'
     + '<div class="note"><strong>Note:</strong> This report covers paid invoices only. Tax is calculated as ' + taxRate + '% of profit per invoice. For deposit and balance invoices, profit is split proportionally (50% each). This is an internal guide — always consult an accountant for filing.</div>'
-    + '<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>'
     + '</body></html>';
-  const w = window.open('', '_blank');
-  if (!w) { showToast('Pop-up blocked — allow pop-ups to print'); return; }
-  w.document.write(html);
-  w.document.close();
-  showToast('Tax report opened — Print or Save as PDF ✓');
+  if(format==='pdf'){
+    htmlToPdf(html, 'TheApparelCo_TaxReport_'+today()+'.pdf');
+  } else {
+    downloadAsHtml('TheApparelCo_TaxReport_'+today()+'.html', html);
+  }
 }
 
 
@@ -3897,13 +4003,7 @@ function exportMetricsReport() {
     html += '</tr>';
   });
   html += '</tbody></table></body></html>';
-  
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'TheApparelCo_Turnaround_' + today() + '.html'; a.click();
-  URL.revokeObjectURL(url);
-  showToast('Report exported — open and Print → Save as PDF ✓');
+  htmlToPdf(html, 'TheApparelCo_Turnaround_' + today() + '.pdf');
 }
 
 
