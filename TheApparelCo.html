@@ -613,6 +613,19 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
       </div>
       <div class="card">
+        <div class="card-header"><span class="card-title">Reporting currency</span><span style="font-size:11px;color:var(--text3)">For dashboard & metrics totals</span></div>
+        <div class="card-body">
+          <div class="field"><label>Convert all totals to</label>
+            <select id="co-reporting-currency" onchange="saveCompanyInfo();refreshFxRates(true).then(()=>{renderDashboard();});">
+              <option value="EUR">EUR € (Euro)</option>
+              <option value="GBP">GBP £ (British Pound)</option>
+              <option value="USD">USD $ (US Dollar)</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Client invoices stay in their own currency. Only the combined dashboard, metrics, and report totals are converted using daily exchange rates.</div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header"><span class="card-title">Company information</span><span style="font-size:11px;color:var(--text3)">Appears on invoices and quotes</span></div>
         <div class="card-body">
           <div class="grid2">
@@ -1283,6 +1296,7 @@ async function showApp(){
   
   // Load settings BEFORE rendering anything that depends on them
   try { loadCompanyInfo(); } catch(e) { console.error('loadCompanyInfo:', e); }
+  try { loadFxRates(); refreshFxRates(); } catch(e) { console.error('FX rates:', e); }
   try { Object.assign(BENCHMARKS, loadBenchmarks()); } catch(e) { console.error('loadBenchmarks:', e); }
   try { loadLogo(); } catch(e) { console.error('loadLogo:', e); }
   
@@ -1354,6 +1368,64 @@ function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('en-
 function showPanel(name,clientId){updateMobileNavActive(name);document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-item,.client-nav').forEach(n=>n.classList.remove('active'));document.getElementById('panel-'+name).classList.add('active');const navEl=document.getElementById('nav-'+name);if(navEl)navEl.classList.add('active');if(clientId){const el=document.getElementById('cn-'+clientId);if(el)el.classList.add('active');renderClientDetail(clientId);}if(name==='pricing')populatePriceClients();if(name==='settings'){loadCompanyInfo();setTimeout(renderBenchmarksForm,50);}if(name==='clients'){renderClientsPanel();}if(name==='pricing'||name==='invoice'){loadInvoiceDefaults();}if(name==='invoice'){document.getElementById('i-date').value=today();buildInvoice();}if(name==='dashboard'){renderDashboard();}if(name==='metrics'){renderMetricsPanel();}if(name==='factory'&&clientId){const el=document.getElementById('fn-'+clientId);if(el)el.classList.add('active');renderFactoryDetail(clientId);}}
 
 // DASHBOARD
+// ════════════════════════════════════════════════════════
+// CURRENCY CONVERSION — convert all client currencies to reporting currency for metrics
+// ════════════════════════════════════════════════════════
+// Rates stored as: how many units of X = 1 EUR (EUR base)
+let FX_RATES = { EUR: 1, GBP: 0.85, USD: 1.08 }; // sensible fallback defaults
+let FX_LAST_FETCH = 0;
+
+function getReportingCurrency(){
+  return lsGet('tac_company', {}).reportingCurrency || 'EUR';
+}
+
+function loadFxRates(){
+  // Load cached rates from localStorage
+  const cached = lsGet('tac_fx_rates', null);
+  if(cached && cached.rates){
+    FX_RATES = cached.rates;
+    FX_LAST_FETCH = cached.time || 0;
+  }
+}
+
+async function refreshFxRates(force){
+  const ONE_DAY = 86400000;
+  // Only fetch once per day unless forced
+  if(!force && FX_LAST_FETCH && (Date.now() - FX_LAST_FETCH) < ONE_DAY) return;
+  try {
+    // Free endpoint, EUR base, no API key needed
+    const res = await fetch('https://open.er-api.com/v6/latest/EUR');
+    if(!res.ok) throw new Error('fx fetch failed');
+    const data = await res.json();
+    if(data && data.rates){
+      // Keep the currencies we care about
+      FX_RATES = {
+        EUR: 1,
+        GBP: data.rates.GBP || FX_RATES.GBP,
+        USD: data.rates.USD || FX_RATES.USD
+      };
+      FX_LAST_FETCH = Date.now();
+      lsSet('tac_fx_rates', { rates: FX_RATES, time: FX_LAST_FETCH });
+    }
+  } catch(e){
+    // Silent fail — keep using cached or fallback rates
+    console.warn('FX rate refresh failed, using cached/fallback', e);
+  }
+}
+
+// Convert an amount FROM a given currency TO the reporting currency
+function toReportingCurrency(amount, fromCurrency){
+  if(!amount) return 0;
+  const from = fromCurrency || 'EUR';
+  const to = getReportingCurrency();
+  if(from === to) return amount;
+  // Convert from→EUR first (rates are units-per-EUR), then EUR→to
+  const fromRate = FX_RATES[from] || 1;  // units of `from` per 1 EUR
+  const toRate = FX_RATES[to] || 1;      // units of `to` per 1 EUR
+  const inEur = amount / fromRate;       // back to EUR
+  return inEur * toRate;                  // EUR to reporting currency
+}
+
 // ════════════════════════════════════════════════════════
 // NEEDS ATTENTION — proactive alerts across all clients
 // ════════════════════════════════════════════════════════
@@ -1537,6 +1609,7 @@ clients.forEach(c=>{
   });
 });
 clients.forEach(c=>{
+  const cConv = v => toReportingCurrency(v, c.currency || 'EUR');
   // Invoices: revenue/profit/outstanding
   lsGet('invoices_'+c.id,[]).forEach(inv=>{
     if (inv.isSample) return; // Production stats exclude samples
@@ -1544,20 +1617,20 @@ clients.forEach(c=>{
     const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
     const fullTotal = inv.totalClient || 0;
     const fullProfit = inv.profit || 0;
-    totR += paid;
-    totOutstanding += Math.max(0, due - paid);
+    totR += cConv(paid);
+    totOutstanding += cConv(Math.max(0, due - paid));
     if (paid > 0 && fullTotal > 0) {
-      totP += fullProfit * (paid / fullTotal);
+      totP += cConv(fullProfit * (paid / fullTotal));
     }
   });
   // Pipeline: accepted quotes not yet invoiced (production only)
   lsGet('quotes_'+c.id,[]).forEach(q=>{
     if (q.isSample) return; // exclude sample quotes
     if (q.status === 'accepted' && !usedQuoteNumbers.has(q.number)) {
-      totPipeline += (q.totalClient || 0);
+      totPipeline += cConv(q.totalClient || 0);
     }
   });
-});el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">€'+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">€'+totPipeline.toFixed(0)+'</div></div></div>'+renderNeedsAttention()+'<div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('')+'</div></div>';
+});const rcSym=sym(getReportingCurrency());el.innerHTML='<div class="panel-title">Overview</div><div class="stat-grid stat-grid-3"><div class="stat"><div class="stat-label">Active orders</div><div class="stat-val">'+active+'</div></div><div class="stat"><div class="stat-label">Sampling</div><div class="stat-val">'+sampling+'</div></div><div class="stat"><div class="stat-label">Revenue (paid)</div><div class="stat-val green">'+rcSym+totR.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val" style="color:var(--amber)">'+rcSym+totOutstanding.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Profit (paid)</div><div class="stat-val green">'+rcSym+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Pipeline value</div><div class="stat-val" style="color:var(--accent)">'+rcSym+totPipeline.toFixed(0)+'</div></div></div>'+renderNeedsAttention()+'<div class="card"><div class="card-header"><span class="card-title">Production turnaround</span><select id="metrics-period" onchange="refreshDashboardMetrics()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="0">All time</option><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last year</option></select></div><div class="card-body" id="metrics-content">'+renderOverallMetrics(90)+'</div></div><div class="card"><div class="card-header"><span class="card-title">All clients ('+filtered.length+'/'+clients.length+')</span><div style="display:flex;gap:8px;align-items:center"><select id="dashboard-filter" onchange="renderDashboard()" style="font-size:11px;padding:4px 22px 4px 8px;background:var(--surface2);width:auto"><option value="all">All</option><option value="prospect">Prospect</option><option value="sample">Sampling</option><option value="active">Production</option><option value="hold">On Hold</option><option value="done">Completed</option><option value="unpaid">Unpaid</option><option value="overdue">Overdue</option><option value="paid">Paid</option></select><button class="btn btn-sm" onclick="openClientModal()">+ New</button></div></div><div>'+filtered.map(c=>'<div class="card-tap" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:0.5px solid var(--border)" onclick="showPanel(\'client\',\''+c.id+'\')"><div class="avatar" style="width:34px;height:34px;font-size:12px">'+initials(c.brand)+'</div><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.brand+'</div><div style="font-size:11px;color:var(--text3)">'+(c.contact&&c.country?c.contact+' · '+c.country:c.contact||c.country||'')+'</div></div><span class="badge-xs badge-'+c.status+'">'+statusLabel(c.status)+'</span></div>').join('')+'</div></div>';
   // Restore filter selection
   setTimeout(()=>{const f=document.getElementById('dashboard-filter');if(f)f.value=filterVal;},0);
 }
@@ -2413,9 +2486,9 @@ filtered.forEach(c=>{
   const outstanding=revenue-paid;
   const sampleRevenue = sampleInvs.reduce((a,inv)=>a+(inv.totalClient||0),0);
   const sampleProfit = sampleInvs.reduce((a,inv)=>a+(inv.profit||0),0);
-  totR+=revenue;totF+=factory;totP+=profit;totPaid+=paid;totOut+=outstanding;totSampleR+=sampleRevenue;
+  const rConv=v=>toReportingCurrency(v,c.currency||'EUR');totR+=rConv(revenue);totF+=rConv(factory);totP+=rConv(profit);totPaid+=rConv(paid);totOut+=rConv(outstanding);totSampleR+=rConv(sampleRevenue);
   rows.push({id:c.id,brand:c.brand,country:c.country||'—',currency:c.currency||'EUR',invoices:invs.length,sampleInvoices:sampleInvs.length,revenue,factory,profit,paid,outstanding,sampleRevenue,sampleProfit,status:c.status});
-});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Production revenue</div><div class="stat-val green">€'+totR.toFixed(0)+'</div></div>'+(totSampleR>0?'<div class="stat"><div class="stat-label">Sample revenue</div><div class="stat-val" style="color:#c4a572">€'+totSampleR.toFixed(0)+'</div></div>':'')+'<div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">€'+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">€'+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">€'+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Revenue</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500"><span onclick="showPanel(\'client\',\''+r.id+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px">'+r.brand+'</span></td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+r.status+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
+});const el=document.getElementById('report-output');if(!rows.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">No data for selected filters</div>';return;}const repSym=sym(getReportingCurrency());el.innerHTML='<div class="stat-grid" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Production revenue</div><div class="stat-val green">'+repSym+totR.toFixed(0)+'</div></div>'+(totSampleR>0?'<div class="stat"><div class="stat-label">Sample revenue</div><div class="stat-val" style="color:#c4a572">'+repSym+totSampleR.toFixed(0)+'</div></div>':'')+'<div class="stat"><div class="stat-label">Factory cost</div><div class="stat-val amber">'+repSym+totF.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Total profit</div><div class="stat-val green">'+repSym+totP.toFixed(0)+'</div></div><div class="stat"><div class="stat-label">Outstanding</div><div class="stat-val '+(totOut>0?'red':'green')+'">'+repSym+totOut.toFixed(0)+'</div></div></div><div class="card" style="overflow:auto"><table class="report-tbl"><thead><tr><th>Brand</th><th>Country</th><th>Status</th><th style="text-align:right">Invoices</th><th style="text-align:right">Revenue</th><th style="text-align:right">Factory</th><th style="text-align:right">Profit</th><th style="text-align:right">Paid</th><th style="text-align:right">Outstanding</th></tr></thead><tbody>'+rows.map(r=>'<tr><td style="font-weight:500"><span onclick="showPanel(\'client\',\''+r.id+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px">'+r.brand+'</span></td><td style="color:var(--text3)">'+r.country+'</td><td><span class="badge-xs badge-'+r.status+'">'+r.status+'</span></td><td style="text-align:right">'+r.invoices+'</td><td style="text-align:right">'+fmtMoney(r.revenue,r.currency)+'</td><td style="text-align:right;color:var(--amber)">'+fmtMoney(r.factory,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.profit,r.currency)+'</td><td style="text-align:right;color:var(--green)">'+fmtMoney(r.paid,r.currency)+'</td><td style="text-align:right;color:'+(r.outstanding>0?'var(--red)':'var(--green)')+'">'+fmtMoney(r.outstanding,r.currency)+'</td></tr>').join('')+'</tbody><tfoot><tr><td colspan="4">TOTAL</td><td style="text-align:right">€'+totR.toFixed(2)+'</td><td style="text-align:right">€'+totF.toFixed(2)+'</td><td style="text-align:right">€'+totP.toFixed(2)+'</td><td style="text-align:right">€'+totPaid.toFixed(2)+'</td><td style="text-align:right">€'+totOut.toFixed(2)+'</td></tr></tfoot></table></div>';}
 function exportReport(format){const from=document.getElementById('rep-from').value,to=document.getElementById('rep-to').value,sf=document.getElementById('rep-status').value;const fromDate=from?new Date(from):new Date(0),toDate=to?new Date(to):new Date();toDate.setHours(23,59,59);let filtered=filterClientsByStatus(clients, sf);const rows=[];filtered.forEach(c=>{const invs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0),factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0),profit=invs.reduce((a,inv)=>a+(inv.profit||0),0),paid=invs.reduce((a,inv)=>a+(inv.amountPaid||0),0);rows.push({Brand:c.brand,Country:c.country||'',Status:c.status,Currency:c.currency||'EUR',Invoices:invs.length,Revenue:revenue.toFixed(2),FactoryCost:factory.toFixed(2),Profit:profit.toFixed(2),Paid:paid.toFixed(2),Outstanding:(revenue-paid).toFixed(2)});});if(!rows.length){showToast('No data to export');return;}if(format==='csv'){const headers=Object.keys(rows[0]);const csv=[headers.join(','),...rows.map(r=>headers.map(h=>'"'+(r[h]||'')+'"').join(','))].join('\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.csv';a.click();URL.revokeObjectURL(url);showToast('CSV exported ✓');}else{const headers=Object.keys(rows[0]);const content='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>The Apparel Co Report</title><style>body{font-family:sans-serif;padding:32px;color:#111}h1{font-family:serif;font-size:24px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:24px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 6px;border-bottom:1px solid #ddd;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 6px;border-bottom:1px solid #eee}tfoot td{font-weight:600;border-top:2px solid #ddd;padding-top:12px}</style></head><body><h1>The Apparel Co — Report</h1><p>Period: '+(from||'All time')+' to '+(to||today())+' · Filter: '+sf+'</p><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+headers.map(h=>'<td>'+(r[h]||'')+'</td>').join('')+'</tr>').join('')+'</tbody><tfoot><tr><td colspan="5">TOTAL</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Revenue),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.FactoryCost),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Profit),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Paid),0).toFixed(2)+'</td><td>'+rows.reduce((a,r)=>a+parseFloat(r.Outstanding),0).toFixed(2)+'</td></tr></tfoot></table></body></html>';const blob=new Blob([content],{type:'text/html'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TheApparelCo_Report_'+today()+'.html';a.click();URL.revokeObjectURL(url);showToast('Report exported — open file and Print → Save as PDF ✓');}}
 
 
@@ -2459,6 +2532,7 @@ function loadLogo() {
 function saveCompanyInfo() {
   const get = id => document.getElementById(id)?.value || '';
   const info = {
+    reportingCurrency: get('co-reporting-currency') || 'EUR',
     name: get('co-name'),
     email: get('co-email'),
     website: get('co-website'),
@@ -2494,6 +2568,7 @@ function loadCompanyInfo() {
   setLogoSize(getLogoSize());
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   if (document.getElementById('co-name')) {
+    set('co-reporting-currency', info.reportingCurrency || 'EUR');
     set('co-name', info.name);
     set('co-email', info.email);
     set('co-website', info.website);
@@ -2528,6 +2603,7 @@ function loadCompanyInfo() {
 function getCompanyInfo() {
   const info = lsGet('tac_company', {});
   return {
+    reportingCurrency: info.reportingCurrency || 'EUR',
     name:        info.name        || 'The Apparel Co',
     email:       info.email       || 'info@theapparelco.co',
     website:     info.website     || 'theapparelco.co',
@@ -4599,6 +4675,8 @@ function calcBusinessMetrics(periodDays) {
     const invs = lsGet('invoices_'+c.id, []);
     const quotes = lsGet('quotes_'+c.id, []);
     if (invs.length > 0 || quotes.length > 0) totalActiveClients++;
+    const cCur = c.currency || 'EUR';
+    const conv = v => toReportingCurrency(v, cCur);
     
     let clientProdInvoices = 0;
     let clientPaid = 0;
@@ -4613,22 +4691,22 @@ function calcBusinessMetrics(periodDays) {
       const isPaid = paid >= due && due > 0;
       
       if (inv.isSample) {
-        totalSampleRevenue += paid;
-        if (paid > 0 && fullTotal > 0) totalSampleProfit += fullProfit * (paid / fullTotal);
+        totalSampleRevenue += conv(paid);
+        if (paid > 0 && fullTotal > 0) totalSampleProfit += conv(fullProfit * (paid / fullTotal));
         // Sample overdue — tracked separately
         if (!isPaid && inv.date) {
           const dueDate = new Date(new Date(inv.date).getTime() + ((parseInt(inv.due)||14)+1) * 86400000);
           if (nowMs > dueDate.getTime()) {
-            sampleOverdueAmount += Math.max(0, due - paid);
+            sampleOverdueAmount += conv(Math.max(0, due - paid));
             sampleOverdueCount++;
           }
         }
       } else {
         clientProdInvoices++;
-        totalRevenue += paid;
-        clientPaid += paid;
-        totalOutstanding += Math.max(0, due - paid);
-        if (paid > 0 && fullTotal > 0) totalProfit += fullProfit * (paid / fullTotal);
+        totalRevenue += conv(paid);
+        clientPaid += conv(paid);
+        totalOutstanding += conv(Math.max(0, due - paid));
+        if (paid > 0 && fullTotal > 0) totalProfit += conv(fullProfit * (paid / fullTotal));
         if (isPaid) {
           invoicesPaidCount++;
           // Days to payment (using last payment date vs invoice date)
@@ -4648,7 +4726,7 @@ function calcBusinessMetrics(periodDays) {
           if (inv.date) {
             const dueDate = new Date(new Date(inv.date).getTime() + ((parseInt(inv.due)||14)+1) * 86400000);
             if (nowMs > dueDate.getTime()) {
-              overdueAmount += Math.max(0, due - paid);
+              overdueAmount += conv(Math.max(0, due - paid));
               overdueCount++;
             }
           }
@@ -4676,9 +4754,9 @@ function calcBusinessMetrics(periodDays) {
         quotesSent++;
         if (q.status === 'accepted') {
           quotesAccepted++;
-          if ((q.totalClient || 0) > 0) allOrderValues.push(q.totalClient);
+          if ((q.totalClient || 0) > 0) allOrderValues.push(conv(q.totalClient));
           if (!usedQuoteNumbers.has(q.number)) {
-            pipelineValue += (q.totalClient || 0);
+            pipelineValue += conv(q.totalClient || 0);
             acceptedQuotesCount++;
           }
         }
@@ -4729,7 +4807,8 @@ function renderMetricsPanel() {
   const m = calcBusinessMetrics(period);
   const periodLabel = period === 0 ? 'all time' : period + ' days';
   
-  const fmt = n => '€' + (n||0).toFixed(0);
+  const rcSym = sym(getReportingCurrency());
+  const fmt = n => rcSym + (n||0).toFixed(0);
   const stat = (label, val, color, sublabel) => 
     '<div class="stat"><div class="stat-label">' + label + '</div><div class="stat-val" style="color:' + (color||'var(--text)') + '">' + val + '</div>' +
     (sublabel ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + sublabel + '</div>' : '') + '</div>';
