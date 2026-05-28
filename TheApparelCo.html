@@ -2775,57 +2775,10 @@ function downloadAsHtml(filename, htmlContent) {
 // Falls back to print dialog if libraries unavailable (offline)
 // ════════════════════════════════════════════════════════
 async function htmlToPdf(htmlContent, filename){
-  // Strip any auto-print script from the HTML
-  const clean = htmlContent.replace(/<scr'?\+?'?ipt>[\s\S]*?<\/scr'?\+?'?ipt>/gi, '').replace(/<script>[\s\S]*?<\/script>/gi, '');
-  // If libraries didn't load (e.g. offline), fall back to print
-  if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
-    openForPrint(htmlContent);
-    showToast('Tip: choose "Save as PDF" in the print dialog');
-    return;
-  }
-  try {
-    showToast('Generating PDF…');
-    // Render the HTML into a hidden container
-    const holder = document.createElement('div');
-    holder.style.position = 'fixed';
-    holder.style.left = '-9999px';
-    holder.style.top = '0';
-    holder.style.width = '794px'; // A4 width at 96dpi
-    holder.style.background = '#fff';
-    // Extract body content
-    const bodyMatch = clean.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    const styleMatch = clean.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-    const inner = bodyMatch ? bodyMatch[1] : clean;
-    holder.innerHTML = (styleMatch ? '<style>'+styleMatch[1]+'</style>' : '') + '<div style="padding:32px;background:#fff;color:#111">' + inner + '</div>';
-    document.body.appendChild(holder);
-
-    const canvas = await html2canvas(holder, { scale: 2, backgroundColor: '#ffffff', logging: false });
-    document.body.removeChild(holder);
-
-    const imgData = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageW = 210, pageH = 297;
-    const imgW = pageW;
-    const imgH = (canvas.height * imgW) / canvas.width;
-    let heightLeft = imgH;
-    let position = 0;
-    pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-    heightLeft -= pageH;
-    // Multi-page if content taller than one page
-    while (heightLeft > 0) {
-      position -= pageH;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-      heightLeft -= pageH;
-    }
-    pdf.save(filename);
-    showToast('PDF downloaded \u2713');
-  } catch(e) {
-    console.error('PDF generation failed', e);
-    openForPrint(htmlContent);
-    showToast('Tip: choose "Save as PDF" in the print dialog');
-  }
+  // Print-to-PDF approach: open the report in a new window and trigger the print dialog.
+  // The user chooses "Save as PDF" as the destination. Consistent across all reports.
+  openForPrint(htmlContent);
+  showToast('Tip: choose "Save as PDF" as the destination');
 }
 
 function openForPrint(htmlContent) {
@@ -3706,7 +3659,7 @@ function exportWorkflowReport() {
       </div>
     </div>`;
   }).join('')}
-  </body></html>`;
+  <scr${''}ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr${''}ipt></body></html>`;
 
   htmlToPdf(html, 'TheApparelCo_Progress_'+today()+'.pdf');
 }
@@ -3883,6 +3836,7 @@ function exportTaxReport(format) {
     + rows.map(r => '<tr><td>' + r.paidDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + '</td><td>' + r.clientName + '</td><td>' + r.invNumber + '</td><td>' + r.invType + '</td><td class="right">' + fmtMoney(r.amountPaid, r.currency) + '</td><td class="right green">' + fmtMoney(r.profit, r.currency) + '</td><td class="right amber">' + fmtMoney(r.tax, r.currency) + '</td></tr>').join('')
     + '</tbody><tfoot><tr><td colspan="4">TOTAL</td><td class="right">€' + totalPaid.toFixed(2) + '</td><td class="right green">€' + totalProfit.toFixed(2) + '</td><td class="right amber">€' + totalTax.toFixed(2) + '</td></tr></tfoot></table>'
     + '<div class="note"><strong>Note:</strong> This report covers paid invoices only. Tax is calculated as ' + taxRate + '% of profit per invoice. For deposit and balance invoices, profit is split proportionally (50% each). This is an internal guide — always consult an accountant for filing.</div>'
+    + '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr'+'ipt>'
     + '</body></html>';
   if(format==='pdf'){
     htmlToPdf(html, 'TheApparelCo_TaxReport_'+today()+'.pdf');
@@ -4002,7 +3956,7 @@ function exportMetricsReport() {
     });
     html += '</tr>';
   });
-  html += '</tbody></table></body></html>';
+  html += '</tbody></table><scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},300);};</scr'+'ipt></body></html>';
   htmlToPdf(html, 'TheApparelCo_Turnaround_' + today() + '.pdf');
 }
 
