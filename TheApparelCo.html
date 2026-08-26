@@ -789,8 +789,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 <div class="overlay" id="client-modal"><div class="modal">
   <div class="modal-title" id="modal-title">New client</div>
-  <div class="grid2"><div class="field"><label>Brand name *</label><input id="f-brand" placeholder="e.g. Studio Mara"></div><div class="field"><label>Contact name</label><input id="f-contact"></div></div>
-  <div class="grid2"><div class="field"><label>Email</label><input id="f-email" type="email"></div><div class="field"><label>WhatsApp</label><input id="f-wa" placeholder="+351..."></div></div>
+  <div class="field"><label>Brand name *</label><input id="f-brand" placeholder="e.g. Studio Mara"></div>
+  <div style="margin:6px 0 4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Contacts</label><button type="button" class="btn btn-xs btn-primary" onclick="addContact('client')">+ Add contact</button></div><div id="client-contacts-list"></div></div>
+  <input type="hidden" id="f-contact"><input type="hidden" id="f-email"><input type="hidden" id="f-wa">
   <div class="field"><label>Address</label><textarea id="f-address" style="min-height:50px"></textarea></div>
   <div class="grid3"><div class="field"><label>Country</label><input id="f-country"></div><div class="field">
     <label style="display:flex;align-items:center;gap:6px">
@@ -813,9 +814,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="modal-title" id="factory-modal-title">New factory</div>
 
   <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:4px 0 8px">Basic information</div>
-  <div class="grid2"><div class="field"><label>Factory name *</label><input id="ff-name" placeholder="e.g. Porto Knitwear Lda"></div><div class="field"><label>Contact name</label><input id="ff-contact"></div></div>
-  <div class="grid2"><div class="field"><label>Email</label><input id="ff-email" type="email"></div><div class="field"><label>Phone</label><input id="ff-phone"></div></div>
-  <div class="grid2"><div class="field"><label>WhatsApp</label><input id="ff-wa" placeholder="+351..."></div><div class="field"><label>Website</label><input id="ff-website" placeholder="optional"></div></div>
+  <div class="grid2"><div class="field"><label>Factory name *</label><input id="ff-name" placeholder="e.g. Porto Knitwear Lda"></div><div class="field"><label>Website</label><input id="ff-website" placeholder="optional"></div></div>
+  <div style="margin:6px 0 4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Contacts</label><button type="button" class="btn btn-xs btn-primary" onclick="addContact('factory')">+ Add contact</button></div><div id="factory-contacts-list"></div></div>
+  <input type="hidden" id="ff-contact"><input type="hidden" id="ff-email"><input type="hidden" id="ff-phone"><input type="hidden" id="ff-wa">
   <div class="field"><label>Address</label><textarea id="ff-address" style="min-height:46px"></textarea></div>
   <div class="grid3">
     <div class="field"><label>City</label><input id="ff-city"></div>
@@ -1701,11 +1702,19 @@ function renderFactoryDetail(id){
   
   // Left: contact + production
   html += '<div>';
-  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Contact</span></div><div class="card-body">';
-  html += infoRow('Contact', f.contact);
-  html += infoRow('Email', f.email);
-  html += infoRow('Phone', f.phone);
-  html += infoRow('WhatsApp', f.wa);
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Contacts</span></div><div class="card-body">';
+  const fContacts = ensureContactsArray(f, 'factory');
+  if(fContacts.length){
+    fContacts.forEach(ct => {
+      html += '<div style="padding:7px 0;border-bottom:0.5px solid var(--border2)">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:500;font-size:13px">'+(ct.name||'—')+'</span><span style="font-size:11px;color:var(--accent2)">'+(ct.role||'')+'</span></div>';
+      if(ct.phone) html += '<div style="font-size:12px;color:var(--text3);margin-top:2px">'+ct.phone+'</div>';
+      if(ct.email) html += '<div style="font-size:12px;color:var(--text3)">'+ct.email+'</div>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div style="font-size:12px;color:var(--text3);padding:4px 0">No contacts added.</div>';
+  }
   html += infoRow('Website', f.website);
   html += infoRow('Address', f.address);
   html += infoRow(taxLabel, f.vat);
@@ -1900,6 +1909,8 @@ function openClientModal(id){
     facSel.innerHTML = '<option value="">— None —</option>' + factories.map(f=>'<option value="'+f.id+'">'+f.name+'</option>').join('');
     facSel.value = c?.factoryId || '';
   }
+  clientContactsDraft = c ? JSON.parse(JSON.stringify(ensureContactsArray(c, 'client'))) : [];
+  renderContactRows('client');
   document.getElementById('client-modal').classList.add('open');
 }
 async function saveClient(){
@@ -1914,6 +1925,13 @@ async function saveClient(){
   c.currency=document.getElementById('f-cur').value;
   c.commission=parseFloat(document.getElementById('f-commission').value)||20;
   c.factoryId=document.getElementById('f-factory')?.value||'';
+  // Save contacts array + sync first into legacy fields
+  c.contacts = clientContactsDraft.filter(x => (x.name||x.phone||x.email));
+  if(c.contacts.length){
+    c.contact = c.contacts[0].name || '';
+    c.email = c.contacts[0].email || '';
+    c.wa = c.contacts[0].phone || '';
+  }
   // Save to localStorage FIRST — instant, never fails, data always safe
   const idx=clients.findIndex(x=>String(x.id)===String(c.id));
   if(idx>=0)clients[idx]=c;else clients.push(c);
@@ -2011,8 +2029,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +'<div class="tabs"><button class="tab active" onclick="switchTab(this,\'ct-stats\')">Stats</button><button class="tab" onclick="switchTab(this,\'ct-info\')">Info</button><button class="tab" onclick="switchTab(this,\'ct-quotes\')">Quotes ('+quotes.length+')</button><button class="tab" onclick="switchTab(this,\'ct-invoices\')">Invoices ('+invoices.length+')</button><button class="tab" onclick="switchTab(this,\'ct-workflow\')">Workflow</button><button class="tab" onclick="switchTab(this,\'ct-photos\')">Photos ('+photos.length+')</button><button class="tab" onclick="switchTab(this,\'ct-docs\')">Tech packs</button><button class="tab" onclick="switchTab(this,\'ct-factinv\')">Factory invoices ('+factoryInvs.length+')</button></div>'
 +'<div id="ct-stats">'+renderClientStats(id)+'</div>'
 +'<div id="ct-info" style="display:none"><div class="card"><div class="card-body"><div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--border)"><div class="avatar">'+initials(c.brand)+'</div><div><div style="font-size:16px;font-weight:500">'+c.brand+'</div>'+(c.contact?'<div style="font-size:12px;color:var(--text3)">'+c.contact+'</div>':'')+'</div></div>'
-+(c.email?'<div class="detail-row"><span class="detail-key">Email</span><span class="detail-val">'+c.email+'</span></div>':'')
-+(c.wa?'<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">'+c.wa+'</span></div>':'')
++(function(){var cts=ensureContactsArray(c,'client');if(!cts.length)return '';return cts.map(function(ct){return '<div class="detail-row"><span class="detail-key">'+(ct.role||'Contact')+'</span><span class="detail-val">'+(ct.name||'')+(ct.phone?' · '+ct.phone:'')+(ct.email?'<br><span style="color:var(--text3);font-size:12px">'+ct.email+'</span>':'')+'</span></div>';}).join('');})()
 +(c.address?'<div class="detail-row"><span class="detail-key">Address</span><span class="detail-val">'+c.address+'</span></div>':'')
 +(c.country?'<div class="detail-row"><span class="detail-key">Country</span><span class="detail-val">'+c.country+'</span></div>':'')
 +(c.factoryId&&getFactory(c.factoryId)?'<div class="detail-row"><span class="detail-key">Factory</span><span class="detail-val"><span onclick="showPanel(\'factory\',\''+c.factoryId+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline">'+factoryName(c.factoryId)+'</span></span></div>':'')
@@ -4252,6 +4269,78 @@ function resolveConfirm(answer) {
 
 
 // ════════════════════════════════════════════════════════
+// MULTI-CONTACT SYSTEM (factories + clients)
+// ════════════════════════════════════════════════════════
+const FACTORY_ROLES = ['Owner / Manager','Sales / Account manager','Production manager','Quality control (QC)','Accounts / Finance','Logistics / Shipping','Sampling / Development','Other'];
+const CLIENT_ROLES = ['Owner / Founder','Designer','Purchasing / Buyer','Accounts / Finance','Marketing','Logistics','Other'];
+
+// Working arrays while a modal is open
+let factoryContactsDraft = [];
+let clientContactsDraft = [];
+
+function roleOptions(roles, selected){
+  return roles.map(r => '<option value="'+r+'"'+(r===selected?' selected':'')+'>'+r+'</option>').join('');
+}
+
+function renderContactRows(kind){
+  // kind = 'factory' or 'client'
+  const draft = kind === 'factory' ? factoryContactsDraft : clientContactsDraft;
+  const roles = kind === 'factory' ? FACTORY_ROLES : CLIENT_ROLES;
+  const container = document.getElementById(kind+'-contacts-list');
+  if(!container) return;
+  if(!draft.length){
+    container.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No contacts yet — click + to add one.</div>';
+    return;
+  }
+  container.innerHTML = draft.map((c, i) => {
+    return '<div style="border:0.5px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:8px">'
+      + '<div class="grid2">'
+        + '<div class="field" style="margin-bottom:8px"><label>Name</label><input value="'+(c.name||'').replace(/"/g,'&quot;')+'" oninput="updateContactField(\''+kind+'\','+i+',\'name\',this.value)"></div>'
+        + '<div class="field" style="margin-bottom:8px"><label>Role</label><select onchange="updateContactField(\''+kind+'\','+i+',\'role\',this.value)">'+roleOptions(roles, c.role||roles[0])+'</select></div>'
+      + '</div>'
+      + '<div class="grid2">'
+        + '<div class="field" style="margin-bottom:0"><label>Phone / WhatsApp</label><input value="'+(c.phone||'').replace(/"/g,'&quot;')+'" placeholder="+351..." oninput="updateContactField(\''+kind+'\','+i+',\'phone\',this.value)"></div>'
+        + '<div class="field" style="margin-bottom:0"><label>Email</label><input type="email" value="'+(c.email||'').replace(/"/g,'&quot;')+'" oninput="updateContactField(\''+kind+'\','+i+',\'email\',this.value)"></div>'
+      + '</div>'
+      + '<div style="text-align:right;margin-top:6px"><button type="button" class="btn btn-xs" style="color:var(--red)" onclick="removeContact(\''+kind+'\','+i+')">Remove</button></div>'
+      + '</div>';
+  }).join('');
+}
+
+function updateContactField(kind, idx, field, value){
+  const draft = kind === 'factory' ? factoryContactsDraft : clientContactsDraft;
+  if(draft[idx]) draft[idx][field] = value;
+}
+
+function addContact(kind){
+  const draft = kind === 'factory' ? factoryContactsDraft : clientContactsDraft;
+  const roles = kind === 'factory' ? FACTORY_ROLES : CLIENT_ROLES;
+  draft.push({ name:'', role:roles[0], phone:'', email:'' });
+  renderContactRows(kind);
+}
+
+function removeContact(kind, idx){
+  const draft = kind === 'factory' ? factoryContactsDraft : clientContactsDraft;
+  draft.splice(idx, 1);
+  renderContactRows(kind);
+}
+
+// Migrate an old single-contact record into the contacts array (once)
+function ensureContactsArray(record, kind){
+  if(Array.isArray(record.contacts) && record.contacts.length) return record.contacts;
+  // Build from legacy fields
+  const roles = kind === 'factory' ? FACTORY_ROLES : CLIENT_ROLES;
+  const legacy = [];
+  const name = record.contact || '';
+  const email = record.email || '';
+  const phone = record.phone || record.wa || '';
+  if(name || email || phone){
+    legacy.push({ name:name, role:roles[0], phone:phone, email:email });
+  }
+  return legacy;
+}
+
+// ════════════════════════════════════════════════════════
 // FACTORY PAYMENTS (money OUT to factory — tracked per client, synced to factory)
 // Each record: {id, clientId, label, amount, currency, invoiceFile, proofFile, paid, paidDate, notes}
 // Stored under factorypayments_{clientId} in localStorage + Drive
@@ -4505,6 +4594,9 @@ function openFactoryModal(id){
   set('ff-status', f?.status || 'active');
   set('ff-rating', f?.rating || 0);
   set('ff-notes', f?.notes);
+  // Load contacts (migrate legacy single contact if needed)
+  factoryContactsDraft = f ? JSON.parse(JSON.stringify(ensureContactsArray(f, 'factory'))) : [];
+  renderContactRows('factory');
   document.getElementById('factory-modal').classList.add('open');
 }
 
@@ -4549,6 +4641,14 @@ async function saveFactory(){
   f.startDate = get('ff-startdate');
   f.notes = get('ff-notes');
   f.status = document.getElementById('ff-status')?.value || 'active';
+  // Save contacts array + sync first contact into legacy fields for backward compatibility
+  f.contacts = factoryContactsDraft.filter(x => (x.name||x.phone||x.email));
+  if(f.contacts.length){
+    f.contact = f.contacts[0].name || '';
+    f.email = f.contacts[0].email || '';
+    f.phone = f.contacts[0].phone || '';
+    f.wa = f.contacts[0].phone || '';
+  }
   // Save localStorage first
   const idx = factories.findIndex(x => String(x.id)===String(f.id));
   if(idx>=0) factories[idx]=f; else factories.push(f);
