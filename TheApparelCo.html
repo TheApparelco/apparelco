@@ -806,6 +806,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div><div class="field"><label>Currency</label><select id="f-cur"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div></div>
   <div class="grid2"><div class="field"><label>Default commission (%)</label><input id="f-commission" type="number" value="20"></div><div class="field"><label>Garment types</label><input id="f-garments" placeholder="e.g. hoodies, tees"></div></div>
   <div class="field"><label>Assigned factory</label><select id="f-factory"><option value="">— None —</option></select></div>
+  <div class="field"><label>Billing type</label><select id="f-billing">
+    <option value="standard">Standard — we invoice the client, we pay the factory</option>
+    <option value="factory-direct">Factory-direct — factory invoices the client, we invoice the factory for commission</option>
+  </select><div style="font-size:11px;color:var(--text3);margin-top:3px">Determines how invoices work for this client. Can be changed later.</div></div>
+  <div class="field"><label>Billing workflow</label><select id="f-billing"><option value="standard">Standard — we invoice the client &amp; pay the factory</option><option value="factory-direct">Factory-direct — factory invoices client, we invoice factory for commission</option></select></div>
   <div class="field"><label>Notes</label><textarea id="f-notes" style="min-height:50px"></textarea></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('client-modal')">Cancel</button><button class="btn btn-primary" id="modal-save-btn" onclick="saveClient()">Save client</button></div>
 </div></div>
@@ -920,6 +925,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <div class="toast" id="toast"></div>
 <input type="file" id="restore-file-input" accept=".json,application/json" style="display:none" onchange="handleRestoreFile(event)">
 <input type="file" id="factory-file-input" style="display:none" multiple onchange="handleFactoryFile(event)">
+<input type="file" id="factory-to-client-input" style="display:none" onchange="handleFactoryToClientUpload(event)">
 <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
 <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFiles(event)">
 <input type="file" id="doc-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ai,.eps,.png,.jpg,.jpeg,.zip" multiple style="display:none" onchange="handleDocFiles(event)">
@@ -1616,6 +1622,7 @@ clients.forEach(c=>{
   // Invoices: revenue/profit/outstanding
   lsGet('invoices_'+c.id,[]).forEach(inv=>{
     if (inv.isSample) return; // Production stats exclude samples
+    if (inv.isFactoryToClient) return; // record only, not our revenue
     const paid = inv.amountPaid || 0;
     const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
     const fullTotal = inv.totalClient || 0;
@@ -1909,6 +1916,8 @@ function openClientModal(id){
     facSel.innerHTML = '<option value="">— None —</option>' + factories.map(f=>'<option value="'+f.id+'">'+f.name+'</option>').join('');
     facSel.value = c?.factoryId || '';
   }
+  const billSel = document.getElementById('f-billing');
+  if(billSel) billSel.value = c?.billingType || 'standard';
   clientContactsDraft = c ? JSON.parse(JSON.stringify(ensureContactsArray(c, 'client'))) : [];
   renderContactRows('client');
   document.getElementById('client-modal').classList.add('open');
@@ -1925,6 +1934,8 @@ async function saveClient(){
   c.currency=document.getElementById('f-cur').value;
   c.commission=parseFloat(document.getElementById('f-commission').value)||20;
   c.factoryId=document.getElementById('f-factory')?.value||'';
+  c.billingType=document.getElementById('f-billing')?.value||'standard';
+  c.billingType=document.getElementById('f-billing')?.value||'standard';
   // Save contacts array + sync first into legacy fields
   c.contacts = clientContactsDraft.filter(x => (x.name||x.phone||x.email));
   if(c.contacts.length){
@@ -2033,6 +2044,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(c.address?'<div class="detail-row"><span class="detail-key">Address</span><span class="detail-val">'+c.address+'</span></div>':'')
 +(c.country?'<div class="detail-row"><span class="detail-key">Country</span><span class="detail-val">'+c.country+'</span></div>':'')
 +(c.factoryId&&getFactory(c.factoryId)?'<div class="detail-row"><span class="detail-key">Factory</span><span class="detail-val"><span onclick="showPanel(\'factory\',\''+c.factoryId+'\')" style="cursor:pointer;color:var(--accent);text-decoration:underline">'+factoryName(c.factoryId)+'</span></span></div>':'')
++'<div class="detail-row"><span class="detail-key">Billing</span><span class="detail-val">'+((c.billingType==='factory-direct')?'Factory-direct (we invoice factory for commission)':'Standard (we invoice client)')+'</span></div>'
 +(c.vat?'<div class="detail-row"><span class="detail-key">'+(c.taxType==='ein'?'EIN':c.taxType==='other'?'Tax ID':'VAT')+'</span><span class="detail-val">'+c.vat+'</span></div>':'')
 +(c.currency?'<div class="detail-row"><span class="detail-key">Currency</span><span class="detail-val">'+c.currency+'</span></div>':'')
 +(c.commission!=null?'<div class="detail-row"><span class="detail-key">Commission</span><span class="detail-val">'+c.commission+'%</span></div>':'')
@@ -2091,13 +2103,46 @@ const PHASES=[
     {label:'Delivery confirmed with client',upload:false}
   ]}
 ];
+// Returns workflow phases adapted to the client's billing type
+function getPhasesForClient(clientId){
+  const billing = getClientBillingType(clientId);
+  if(billing !== 'factory-direct') return PHASES;
+  // Factory-direct: replace the money steps in Bulk & QC phases
+  return PHASES.map(phase => {
+    if(phase.name === 'Bulk production'){
+      return { name: phase.name, items: [
+        {label:'Price given to factory for client invoice',upload:false},
+        {label:'Factory invoice received — forwarded to client',upload:true},
+        {label:'Client paid factory 50% deposit — proof received',upload:true,factoryPay:true},
+        {label:'Commission invoice sent to factory (50%)',upload:false},
+        {label:'Fabric & trims ordered — update sent',upload:true},
+        {label:'Bulk production started — update sent',upload:true},
+        {label:'Mid-production photos sent to client',upload:true}
+      ]};
+    }
+    if(phase.name === 'QC & dispatch'){
+      return { name: phase.name, items: [
+        {label:'QC completed — photos sent to client',upload:true},
+        {label:'Client paid factory 50% balance — proof received',upload:true,factoryPay:true},
+        {label:'Commission invoice sent to factory (50% balance)',upload:false},
+        {label:'Commission received from factory',upload:false},
+        {label:'Order packed & dispatched',upload:true},
+        {label:'Tracking number sent to client',upload:true},
+        {label:'Delivery confirmed with client',upload:true}
+      ]};
+    }
+    return phase;
+  });
+}
+
 function renderWorkflow(clientId,checks,quotes){
   const stepFiles = lsGet('stepfiles_'+clientId, {});
   const dates = lsGet('checkdates_'+clientId, {});
   const sentQuotes = (quotes||[]).filter(q=>q.status==='accepted'||q.status==='pending');
   // Use HTML-escape function for safety
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return PHASES.map((phase, pi) => '<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">' +
+  const clientPhases = getPhasesForClient(clientId);
+  return clientPhases.map((phase, pi) => '<div class="card" style="margin-bottom:12px"><div class="card-header"><span class="card-title">'+phase.name+'</span></div><div class="card-body" style="padding-top:4px;padding-bottom:4px">' +
     phase.items.map((item, ii) => {
       const k = phase.name+'|'+item.label;
       const done = !!checks[k];
@@ -2390,8 +2435,86 @@ function viewQuote(clientId,idx){const c=clients.find(x=>String(x.id)===String(c
 function updateQuoteStatus(clientId,idx,status){const quotes=getClientQuotes(clientId);if(quotes[idx]){quotes[idx].status=status;saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}}
 async function deleteQuote(clientId,idx){const _ok=await themedConfirm('Delete quote?','Delete this quote permanently?','Delete','🗑️');if(!_ok)return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
 async function convertQuoteToInvoice(clientId,idx){
-  // Open the invoice creator pre-selecting this quote — gives user payment type choice
+  const billing = getClientBillingType(clientId);
+  if(billing === 'factory-direct'){
+    // Factory-direct: offer commission-invoice + upload-factory-invoice choices
+    openFactoryDirectInvoiceChoice(clientId, idx);
+    return;
+  }
+  // Standard: open the invoice creator pre-selecting this quote
   openInvoiceCreator(clientId, idx);
+}
+
+function openFactoryDirectInvoiceChoice(clientId, idx){
+  const q = getClientQuotes(clientId)[idx];
+  if(!q) return;
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  const s = sym(q.cur||c?.currency||'EUR');
+  const commission = q.profit || 0;
+  const title = document.getElementById('quote-modal-title');
+  const body = document.getElementById('quote-modal-body');
+  const actions = document.getElementById('quote-modal-actions');
+  if(title) title.textContent = 'Factory-direct billing';
+  if(body){
+    body.innerHTML = '<div style="padding:4px 2px">'
+      + '<p style="font-size:13px;color:var(--text2);margin-bottom:14px">This client is set to <strong>Factory-direct billing</strong>. The factory invoices the client directly. Choose an action:</p>'
+      + '<div style="border:0.5px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">'
+        + '<div style="font-weight:600;font-size:14px;margin-bottom:4px">🧾 Upload factory\'s invoice to client</div>'
+        + '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Store the invoice the factory sends (to forward to your client). Kept as a record — not counted as your revenue.</div>'
+        + '<button class="btn btn-sm" onclick="triggerFactoryToClientUpload(\''+clientId+'\','+idx+')">Upload factory invoice</button>'
+      + '</div>'
+      + '<div style="border:0.5px solid var(--accent);border-radius:10px;padding:14px">'
+        + '<div style="font-weight:600;font-size:14px;margin-bottom:4px">💰 Create commission invoice (to factory)</div>'
+        + '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Invoice the factory for your commission of <strong>'+s+commission.toFixed(2)+'</strong>. This counts as your revenue.</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          + '<button class="btn btn-sm btn-primary" onclick="commissionInvoiceChoice(\''+clientId+'\','+idx+',\'deposit\')">50% Deposit</button>'
+          + '<button class="btn btn-sm btn-primary" onclick="commissionInvoiceChoice(\''+clientId+'\','+idx+',\'balance\')">50% Balance</button>'
+          + '<button class="btn btn-sm btn-primary" onclick="commissionInvoiceChoice(\''+clientId+'\','+idx+',\'full\')">Full commission</button>'
+        + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+  if(actions) actions.innerHTML = '<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button>';
+  document.getElementById('quote-modal').classList.add('open');
+}
+
+function commissionInvoiceChoice(clientId, idx, type){
+  closeModal('quote-modal');
+  createCommissionInvoiceFromQuote(clientId, idx, type);
+}
+
+// Upload the factory's invoice-to-client as a record (not our revenue)
+let factoryToClientCtx = { clientId:null, quoteIdx:null };
+function triggerFactoryToClientUpload(clientId, idx){
+  factoryToClientCtx = { clientId, quoteIdx: idx };
+  document.getElementById('factory-to-client-input').click();
+}
+async function handleFactoryToClientUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const { clientId, quoteIdx } = factoryToClientCtx;
+  const q = getClientQuotes(clientId)[quoteIdx];
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  const du = await readAsDataUrl(file);
+  const nm = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+  const inv = {
+    id: Date.now(),
+    number: 'FACT-'+(q?q.number:'')+'-'+Date.now().toString().slice(-4),
+    date: today(),
+    cur: q?.cur || c?.currency || 'EUR',
+    isFactoryToClient: true,       // record only — excluded from revenue
+    totalClient: q ? q.totalClient : 0,
+    amountDue: 0, amountPaid: 0, payments: [],
+    fileName: nm, fileData: du,
+    fromQuote: q ? q.number : ''
+  };
+  const invs = getClientInvoices(clientId);
+  invs.unshift(inv);
+  saveClientInvoices(clientId, invs);
+  closeModal('quote-modal');
+  e.target.value='';
+  showToast('Factory invoice stored ✓');
+  renderClientDetail(clientId);
 }
 
 // PAYMENTS & INVOICE RECORDS
@@ -2496,7 +2619,7 @@ function generateReport(){const from=document.getElementById('rep-from').value,t
 filtered.forEach(c=>{
   const allInvs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});
   // Production invoices (exclude samples to avoid mixing in revenue)
-  const invs = allInvs.filter(inv => !inv.isSample);
+  const invs = allInvs.filter(inv => !inv.isSample && !inv.isFactoryToClient);
   const sampleInvs = allInvs.filter(inv => inv.isSample);
   const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0);
   const factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0);
@@ -2522,7 +2645,7 @@ function exportReport(format){
   const rows=[];
   filtered.forEach(c=>{
     const allInvs=lsGet('invoices_'+c.id,[]).filter(inv=>{const d=new Date(inv.date);return d>=fromDate&&d<=toDate;});
-    const invs=allInvs.filter(inv=>!inv.isSample);
+    const invs=allInvs.filter(inv=>!inv.isSample&&!inv.isFactoryToClient);
     const revenue=invs.reduce((a,inv)=>a+(inv.totalClient||0),0);
     const factory=invs.reduce((a,inv)=>a+(inv.totalFactory||0),0);
     // Realized profit only — scaled by amount actually paid
@@ -3066,6 +3189,52 @@ async function useQuoteForInvoice(clientId, quoteIdx) {
   closeModal('quote-modal');
   createInvoiceFromQuoteDirect(clientId, quoteIdx, invType);
 }
+function getClientBillingType(clientId){
+  const c = clients.find(x => String(x.id) === String(clientId));
+  return (c && c.billingType) || 'standard';
+}
+function isFactoryDirect(clientId){
+  return getClientBillingType(clientId) === 'factory-direct';
+}
+
+// Create a commission invoice addressed to the factory (Workflow 2).
+// The commission = quote.profit (totalClient - totalFactory).
+function createCommissionInvoiceFromQuote(clientId, idx, passedType){
+  const c = clients.find(x => String(x.id) === String(clientId));
+  const q = getClientQuotes(clientId)[idx];
+  if (!q) return;
+  if (q.isSample) { themedAlert('Not applicable','Commission invoices apply to production orders, not samples.','ℹ️'); return; }
+  const invType = passedType || getSelectedInvoiceType();
+  const commissionTotal = q.profit || 0; // our commission = profit portion
+  let amountDue = commissionTotal;
+  let typeLabel = '';
+  if (invType === 'deposit') { amountDue = commissionTotal / 2; typeLabel = ' (50% Deposit)'; }
+  else if (invType === 'balance') { amountDue = commissionTotal / 2; typeLabel = ' (50% Balance)'; }
+  const inv = {
+    id: Date.now(),
+    number: getNextInvoiceNumber(false),
+    date: today(),
+    cur: q.cur || c?.currency || 'EUR',
+    styles: q.styles, samples: q.samples,
+    isCommission: true,                 // marks this as a commission-to-factory invoice
+    billTo: 'factory',
+    factoryId: c?.factoryId || '',
+    totalClient: commissionTotal,       // for our books, the commission IS the invoice total
+    amountDue: amountDue,
+    invType: invType,
+    typeLabel: typeLabel,
+    isSample: false,
+    totalFactory: 0,                    // no factory cost on a commission invoice
+    profit: commissionTotal,            // the whole commission is profit (our earning)
+    amountPaid: 0, payments: [], fromQuote: q.number
+  };
+  const invs = getClientInvoices(clientId);
+  invs.unshift(inv);
+  saveClientInvoices(clientId, invs);
+  showToast('Commission invoice '+inv.number+' created for factory');
+  renderClientDetail(clientId);
+}
+
 async function createInvoiceFromQuoteDirect(clientId, idx, passedType) {
   const c = clients.find(x => String(x.id) === String(clientId));
   const q = getClientQuotes(clientId)[idx];
@@ -4838,6 +5007,7 @@ function calcBusinessMetrics(periodDays) {
     invs.forEach(inv => {
       const invDate = inv.date ? new Date(inv.date).getTime() : 0;
       if (!inPeriod(inv.date)) return;
+      if (inv.isFactoryToClient) return; // factory-billed-client invoice: a record only, not our revenue
       const paid = inv.amountPaid || 0;
       const due = inv.amountDue != null ? inv.amountDue : (inv.totalClient || 0);
       const fullTotal = inv.totalClient || 0;
