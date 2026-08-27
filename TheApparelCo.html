@@ -911,6 +911,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<div class="overlay" id="choice-modal"><div class="modal" style="width:440px">
+  <div class="modal-title" id="choice-title">Choose</div>
+  <div id="choice-msg" style="font-size:13px;color:var(--text2);margin-bottom:16px;white-space:pre-line"></div>
+  <div id="choice-buttons"></div>
+</div></div>
 <div class="overlay" id="confirm-modal" style="z-index:10000">
   <div class="modal" style="width:380px;text-align:center;padding:28px 24px">
     <div style="font-size:36px;margin-bottom:12px" id="confirm-icon">✓</div>
@@ -933,6 +938,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <input type="file" id="restore-file-input" accept=".json,application/json" style="display:none" onchange="handleRestoreFile(event)">
 <input type="file" id="factory-file-input" style="display:none" multiple onchange="handleFactoryFile(event)">
 <input type="file" id="factory-to-client-input" style="display:none" onchange="handleFactoryToClientUpload(event)">
+<input type="file" id="factory-proof-input" style="display:none" onchange="handleFactoryProofUpload(event)">
 <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
 <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoFiles(event)">
 <input type="file" id="doc-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ai,.eps,.png,.jpg,.jpeg,.zip" multiple style="display:none" onchange="handleDocFiles(event)">
@@ -1315,6 +1321,7 @@ async function showApp(){
   // Load settings BEFORE rendering anything that depends on them
   try { loadCompanyInfo(); } catch(e) { console.error('loadCompanyInfo:', e); }
   try { loadFxRates(); refreshFxRates(); } catch(e) { console.error('FX rates:', e); }
+  try { cleanupAutoFactoryPayments(); } catch(e) { console.error('cleanup:', e); }
   try { Object.assign(BENCHMARKS, loadBenchmarks()); } catch(e) { console.error('loadBenchmarks:', e); }
   try { loadLogo(); } catch(e) { console.error('loadLogo:', e); }
   
@@ -1800,6 +1807,24 @@ function renderFactoryDetail(id){
     html += '<div style="font-size:12px;color:var(--text3);padding:4px 0">No commission invoices yet. These are created for factory-direct clients.</div>';
   }
   html += '</div></div>';
+    // ── Factory invoices on file (client → factory payments) ──
+  const factInvs = factoryInvoicesForFactory(f.id);
+  if(factInvs.length){
+    let fPaid=0, fUnpaid=0;
+    html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">🧾 Factory invoices (client pays factory)</span></div><div class="card-body">';
+    factInvs.forEach(fi => {
+      if(fi.paidToFactory) fPaid += toReportingCurrency(fi.amount, fi.cur); else fUnpaid += toReportingCurrency(fi.amount, fi.cur);
+      const badge = fi.paidToFactory ? '<span class="badge-xs badge-active">Paid to factory</span>' : '<span class="badge-xs badge-sample">Unpaid</span>';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border2);font-size:13px">'
+        + '<span style="flex:1;cursor:pointer" onclick="openFactoryInvoiceFromFactory(\''+fi.clientId+'\','+fi.invIdx+')"><strong>'+fi.clientBrand+'</strong> · '+fi.number+'</span>'
+        + '<span style="color:var(--text2)">'+fmtMoney(fi.amount,fi.cur)+'</span>'+badge
+        + '<button class="btn btn-xs" onclick="event.stopPropagation();goToClientInvoices(\''+fi.clientId+'\')" title="Go to client">Client ›</button>'
+        + '</div>';
+    });
+    const rcSym = sym(getReportingCurrency());
+    html += '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;font-size:13px"><span style="color:var(--text3)">Paid to factory: <strong style="color:var(--green)">'+rcSym+fPaid.toFixed(0)+'</strong></span><span style="color:var(--text3)">Awaiting: <strong style="color:var(--amber)">'+rcSym+fUnpaid.toFixed(0)+'</strong></span></div>';
+    html += '</div></div>';
+  }
     html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">💸 Payments to this factory</span><span style="font-size:11px;color:var(--text3)">across '+perf.linkedCount+' client'+(perf.linkedCount!==1?'s':'')+'</span></div><div class="card-body">';
   if(allPayments.length){
     let totalPaid=0, totalDue=0;
@@ -2080,7 +2105,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(c.notes?'<div class="detail-row"><span class="detail-key">Notes</span><span class="detail-val">'+c.notes+'</span></div>':'')
 +'</div></div></div>'
 +'<div id="ct-quotes" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Quotes</span><button class="btn btn-sm" onclick="openNewQuote(\''+id+'\')">+ New quote</button></div><div>'
-+(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
++(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs" onclick="event.stopPropagation();editQuote(\''+id+'\','+i+')" title="Edit quote">✎ Edit</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
 +'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div></div><div>'
 +(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded file">⬇ File</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
@@ -2367,8 +2392,8 @@ function slideNext(){slideIdx=(slideIdx+1)%slidePhotos.length;showSlide();}
 function closeSlideshow(){document.getElementById('slideshow').classList.remove('open');}
 
 // QUOTES
-let activeQuoteClientId=null,qStyleIdx=0,qSampleIdx=0;
-function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="field" style="margin-bottom:14px"><label>Quote type</label><div style="display:flex;gap:0;background:var(--surface2);border-radius:8px;padding:3px;border:0.5px solid var(--border2)"><button type="button" id="q-type-prod" onclick="setQuoteType(0)" style="flex:1;padding:9px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">📦 Production quote</button><button type="button" id="q-type-samp" onclick="setQuoteType(1)" style="flex:1;padding:9px;background:transparent;color:var(--text2);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">🧵 Sample quote</button></div><input type="hidden" id="q-issample" value="0"></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value=\"'+peekNextQuoteNumber()+'\"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div id="q-protofee-wrap" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid var(--accent)"><div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin-bottom:8px">Sample-only fields</div><div class="grid2"><div class="field"><label>Prototype Development Fee (€)</label><input id="q-protofee" type="number" value="0" oninput="updateQuotePreview()" placeholder="Refundable if production within 60 days"></div><div class="field"><label>Commission (%) — invisible to client</label><input id="q-samplecomm" type="number" value="0" oninput="updateQuotePreview()" placeholder="0 = no commission"></div></div><div style="font-size:11px;color:var(--text3);margin-top:6px">The Prototype Development Fee is refundable if the client moves to bulk production within 60 days of sample approval. Commission is hidden from the client document.</div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
+let activeQuoteClientId=null,qStyleIdx=0,qSampleIdx=0,editingQuoteIdx=null;
+function openNewQuote(clientId){activeQuoteClientId=clientId;qStyleIdx=0;qSampleIdx=0;editingQuoteIdx=null;const c=clients.find(x=>String(x.id)===String(clientId));const comm=c?.commission||20;document.getElementById('quote-modal-title').textContent='New quote';document.getElementById('quote-modal-body').innerHTML='<div class="field" style="margin-bottom:14px"><label>Quote type</label><div style="display:flex;gap:0;background:var(--surface2);border-radius:8px;padding:3px;border:0.5px solid var(--border2)"><button type="button" id="q-type-prod" onclick="setQuoteType(0)" style="flex:1;padding:9px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">📦 Production quote</button><button type="button" id="q-type-samp" onclick="setQuoteType(1)" style="flex:1;padding:9px;background:transparent;color:var(--text2);border:none;border-radius:6px;font-weight:500;cursor:pointer;font-size:13px;font-family:inherit">🧵 Sample quote</button></div><input type="hidden" id="q-issample" value="0"></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Quote number</label><input id="q-num" value=\"'+peekNextQuoteNumber()+'\"></div><div class="field"><label>Date</label><input id="q-date" type="date" value="'+today()+'"></div><div class="field"><label>Valid until</label><input id="q-valid" type="date" value="'+new Date(Date.now()+14*86400000).toISOString().split('T')[0]+'"></div></div><div class="grid3" style="margin-bottom:12px"><div class="field"><label>Currency</label><select id="q-cur"><option value="EUR"'+(c?.currency==='EUR'?' selected':'')+'>EUR €</option><option value="GBP"'+(c?.currency==='GBP'?' selected':'')+'>GBP £</option><option value="USD"'+(c?.currency==='USD'?' selected':'')+'>USD $</option></select></div><div class="field"><label>IVA (%)</label><input id="q-iva" type="number" value="23" oninput="updateQuotePreview()"></div><div class="field"><label>Shipping (€)</label><input id="q-ship" type="number" value="200" oninput="updateQuotePreview()"></div></div><div id="q-protofee-wrap" style="display:none;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid var(--accent)"><div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin-bottom:8px">Sample-only fields</div><div class="grid2"><div class="field"><label>Prototype Development Fee (€)</label><input id="q-protofee" type="number" value="0" oninput="updateQuotePreview()" placeholder="Refundable if production within 60 days"></div><div class="field"><label>Commission (%) — invisible to client</label><input id="q-samplecomm" type="number" value="0" oninput="updateQuotePreview()" placeholder="0 = no commission"></div></div><div style="font-size:11px;color:var(--text3);margin-top:6px">The Prototype Development Fee is refundable if the client moves to bulk production within 60 days of sample approval. Commission is hidden from the client document.</div></div><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Styles</div><div id="q-styles-wrap"></div><button class="btn btn-sm" onclick="addQuoteStyle('+comm+')" style="margin-bottom:14px">+ Add style</button><div style="margin:10px 0 8px;font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Samples</div><div id="q-samples-wrap"></div><button class="btn btn-sm" onclick="addQuoteSample()">+ Add sample</button><div id="q-total-preview" style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);font-size:13px"></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" onclick="saveNewQuote()">Save quote</button>';document.getElementById('quote-modal').classList.add('open');addQuoteStyle(comm);updateQuotePreview();}
 function addQuoteStyle(dc){qStyleIdx++;const wrap=document.getElementById('q-styles-wrap');const div=document.createElement('div');div.className='style-block';div.id='qs-'+qStyleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qs-'+qStyleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Style '+qStyleIdx+'</div><div class="grid2" style="margin-bottom:8px"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. hoodie — black" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Size range</label><input placeholder="e.g. XS-XL" oninput="updateQuotePreview()"></div></div><div class="grid3"><div class="field" style="margin:0"><label>Units</label><input type="number" value="300" min="1" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price/unit (€)</label><input type="number" value="18.00" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="'+(dc||20)+'" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function addQuoteSample(){qSampleIdx++;const wrap=document.getElementById('q-samples-wrap');const div=document.createElement('div');div.className='style-block';div.id='qsamp-'+qSampleIdx;div.innerHTML='<button class="remove-btn" onclick="document.getElementById(\'qsamp-'+qSampleIdx+'\').remove();updateQuotePreview()">✕</button><div class="style-block-title">Sample '+qSampleIdx+'</div><div class="grid3"><div class="field" style="margin:0"><label>Description</label><input placeholder="e.g. size M" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Factory price (€)</label><input type="number" value="45" step="0.01" oninput="updateQuotePreview()"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="0" oninput="updateQuotePreview()"></div></div>';wrap.appendChild(div);updateQuotePreview();}
 function getQuoteStyles(){return Array.from(document.querySelectorAll('.style-block[id^="qs-"]')).map(b=>{const inp=b.querySelectorAll('input');const desc=inp[0].value||'Style',sizes=inp[1].value||'',units=parseInt(inp[2].value)||0,fp=parseFloat(inp[3].value)||0,co=parseFloat(inp[4].value)||0,ppu=fp*(1+co/100);return{desc,sizes,units,fp,co,ppu,subtotal:ppu*units};});}
@@ -2413,7 +2438,7 @@ function updateQuotePreview(){
 }
 async function saveNewQuote(){
   const isSample = document.getElementById('q-issample')?.value === '1';
-  const ok = await themedConfirm(isSample ? 'Create sample quote?' : 'Create quote?', 'You can edit or delete it later if needed.', 'Create quote', isSample ? '🧵' : '📄');
+  const ok = await themedConfirm(editingQuoteIdx!=null ? 'Save changes?' : (isSample ? 'Create sample quote?' : 'Create quote?'), editingQuoteIdx!=null ? 'Update this quote with your changes.' : 'You can edit or delete it later if needed.', editingQuoteIdx!=null ? 'Save changes' : 'Create quote', isSample ? '🧵' : '📄');
   if (!ok) return;
   const styles=getQuoteStyles(),samples=getQuoteSamples();
   const iva=parseNum(document.getElementById('q-iva').value, 23);
@@ -2451,18 +2476,143 @@ async function saveNewQuote(){
     status:'pending'
   };
   const clientId = activeQuoteClientId;
-  const quotes=getClientQuotes(clientId);quotes.unshift(quote);saveClientQuotes(clientId,quotes);
+  const quotes=getClientQuotes(clientId);
+  if(editingQuoteIdx != null && quotes[editingQuoteIdx]){
+    // EDITING an existing quote — preserve id, number, status
+    const existing = quotes[editingQuoteIdx];
+    quote.id = existing.id;
+    quote.number = existing.number;
+    quote.status = existing.status || 'pending';
+    // Check if an invoice already exists from this quote
+    const invs = getClientInvoices(clientId);
+    const linkedInvs = invs.map((inv,ix)=>({inv,ix})).filter(o => o.inv.fromQuote===existing.number || (o.inv.fromQuotes && o.inv.fromQuotes.split(',').map(s=>s.trim()).includes(existing.number)));
+    if(linkedInvs.length){
+      const hasPayments = linkedInvs.some(o => (o.inv.amountPaid||0) > 0 || (o.inv.payments && o.inv.payments.length));
+      let msg = 'This quote already has '+linkedInvs.length+' invoice'+(linkedInvs.length>1?'s':'')+' created from it. Editing the quote does not change existing invoices.';
+      if(hasPayments) msg += '\n\n⚠️ Some of those invoices have PAYMENTS recorded. Replacing them would lose that payment history unless you migrate it.';
+      const choice = await themedChoice('Invoice already exists', msg, [
+        {label:'Keep quote + invoices', value:'keep'},
+        {label: hasPayments ? 'Replace (migrate payments)' : 'Replace invoices', value:'replace'},
+        {label:'Cancel', value:'cancel'}
+      ]);
+      if(choice === 'cancel') return;
+      quotes[editingQuoteIdx] = quote;
+      saveClientQuotes(clientId, quotes);
+      if(choice === 'replace'){
+        // Remove old linked invoices, migrating payments if any
+        const migrated = [];
+        linkedInvs.forEach(o => { if(o.inv.payments && o.inv.payments.length) migrated.push(...o.inv.payments); });
+        const oldPaid = linkedInvs.reduce((a,o)=>a+(o.inv.amountPaid||0),0);
+        // Remove old invoices (highest index first)
+        linkedInvs.sort((a,b)=>b.ix-a.ix).forEach(o => invs.splice(o.ix,1));
+        saveClientInvoices(clientId, invs);
+        // Create a fresh invoice from the edited quote, carrying migrated payments
+        if(!quote.isSample){
+          const newInv = {
+            id: Date.now(),
+            number: getNextInvoiceNumber(false),
+            date: today(),
+            cur: quote.cur, styles: quote.styles, samples: quote.samples,
+            iva: quote.iva, ivaAmt: quote.ivaAmt, ship: quote.ship,
+            totalClient: quote.totalClient, totalFactory: quote.totalFactory,
+            profit: quote.profit,
+            amountDue: quote.totalClient,
+            amountPaid: oldPaid,
+            payments: migrated,
+            fromQuote: quote.number
+          };
+          invs.unshift(newInv);
+          saveClientInvoices(clientId, invs);
+          if(oldPaid > quote.totalClient){
+            showToast('⚠️ Migrated payments ('+sym(quote.cur)+oldPaid.toFixed(2)+') exceed new total — please review');
+          } else {
+            showToast('Quote updated + invoice replaced'+(migrated.length?' (payments migrated)':'')+' ✓');
+          }
+        } else {
+          showToast('Quote updated ✓');
+        }
+      } else {
+        showToast('Quote updated (existing invoices kept) ✓');
+      }
+    } else {
+      quotes[editingQuoteIdx] = quote;
+      saveClientQuotes(clientId, quotes);
+      showToast('Quote updated ✓');
+    }
+  } else {
+    quotes.unshift(quote);
+    saveClientQuotes(clientId,quotes);
+    showToast('Quote saved ✓');
+  }
+  editingQuoteIdx = null;
   closeModal('quote-modal');
-  showToast('Quote saved ✓');
   await renderClientDetail(clientId);
-  // After render, switch to quotes tab
   const tab = document.querySelector('#client-content [onclick*="ct-quotes"]');
   if (tab) switchTab(tab, 'ct-quotes');
 }
+// Edit an existing quote — reopen the modal prefilled, then update on save
+function editQuote(clientId, idx){
+  const q = getClientQuotes(clientId)[idx];
+  if(!q){ showToast('Quote not found'); return; }
+  // Build the modal with the correct type
+  openNewQuote(clientId);
+  editingQuoteIdx = idx;
+  document.getElementById('quote-modal-title').textContent = 'Edit quote '+(q.number||'');
+  // Set the quote type
+  if(q.isSample) setQuoteType(1); else setQuoteType(0);
+  // Basic fields
+  const setV = (id,v)=>{ const el=document.getElementById(id); if(el!=null && v!=null) el.value=v; };
+  setV('q-num', q.number);
+  setV('q-date', q.date);
+  setV('q-valid', q.validUntil);
+  setV('q-cur', q.cur);
+  setV('q-iva', q.iva);
+  setV('q-ship', q.ship);
+  if(q.isSample){ setV('q-protofee', q.protoFee); setV('q-samplecomm', q.sampleCommPct); }
+  // Rebuild style blocks
+  const wrap = document.getElementById('q-styles-wrap');
+  if(wrap){
+    wrap.innerHTML=''; qStyleIdx=0;
+    (q.styles||[]).forEach(g=>{
+      addQuoteStyle(g.co);
+      const block = document.getElementById('qs-'+qStyleIdx);
+      if(block){
+        const inp = block.querySelectorAll('input');
+        inp[0].value=g.desc||''; inp[1].value=g.sizes||''; inp[2].value=g.units||0; inp[3].value=(g.fp!=null?g.fp:0); inp[4].value=(g.co!=null?g.co:20);
+      }
+    });
+  }
+  // Rebuild sample blocks
+  const swrap = document.getElementById('q-samples-wrap');
+  if(swrap){
+    swrap.innerHTML=''; qSampleIdx=0;
+    (q.samples||[]).forEach(x=>{
+      addQuoteSample();
+      const block = document.getElementById('qsm-'+qSampleIdx);
+      if(block){
+        const inp = block.querySelectorAll('input');
+        if(inp[0]) inp[0].value=x.desc||'';
+        if(inp[1]) inp[1].value=(x.fp!=null?x.fp:0);
+      }
+    });
+  }
+  updateQuotePreview();
+}
+
 function viewQuote(clientId,idx){const c=clients.find(x=>String(x.id)===String(clientId));const q=getClientQuotes(clientId)[idx];if(!q)return;const s=sym(q.cur||c?.currency||'EUR');document.getElementById('quote-modal-title').textContent='Quote '+q.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">Quote '+q.number+'</div><div class="inv-meta">'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Prepared for</div><div class="inv-bill-name">'+(c?.brand||'—')+'</div>'+(c?.address?'<div style="font-size:12px;color:#666;margin-top:2px">'+c.address+(c.country?', '+c.country:'')+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th style="text-align:right">Total</th></tr></thead><tbody>'+q.styles.map(g=>'<tr><td>'+g.desc+(g.sizes?' <span style="color:#999;font-size:12px">('+g.sizes+')</span>':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(q.ivaAmt?'<tr><td>IVA ('+q.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+q.ivaAmt.toFixed(2)+'</td></tr>':'')+(q.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+q.ship.toFixed(2)+'</td></tr>':'')+q.samples.map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:220px;margin-left:auto"><div class="inv-total-line grand"><span>Total</span><span>'+s+q.totalClient.toFixed(2)+'</span></div></div><div class="inv-footer">This quote is valid until '+fmtDate(q.validUntil)+'. '+getCompanyInfo().footer+'</div></div><div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px;color:var(--text3)">Status:</span><select class="btn btn-sm" onchange="updateQuoteStatus(\''+clientId+'\','+idx+',this.value)"><option value="pending"'+(q.status==='pending'?' selected':'')+'>Pending</option><option value="accepted"'+(q.status==='accepted'?' selected':'')+'>Accepted</option><option value="rejected"'+(q.status==='rejected'?' selected':'')+'>Rejected</option></select></div>';document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadQuotePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadQuoteHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-primary" onclick="convertQuoteToInvoice(\''+clientId+'\','+idx+');closeModal(\'quote-modal\')">Convert to invoice →</button>';document.getElementById('quote-modal').classList.add('open');}
 function updateQuoteStatus(clientId,idx,status){const quotes=getClientQuotes(clientId);if(quotes[idx]){quotes[idx].status=status;saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}}
 async function deleteQuote(clientId,idx){const _ok=await themedConfirm('Delete quote?','Delete this quote permanently?','Delete','🗑️');if(!_ok)return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
 async function convertQuoteToInvoice(clientId,idx){
+  // Warn if this quote already has an invoice (warn but allow)
+  const _q = getClientQuotes(clientId)[idx];
+  if(_q){
+    const _invs = getClientInvoices(clientId);
+    const _already = _invs.some(inv => inv.fromQuote===_q.number || (inv.fromQuotes && inv.fromQuotes.split(',').map(s=>s.trim()).includes(_q.number)));
+    if(_already){
+      const _ok = await themedConfirm('Invoice already exists', 'An invoice has already been created from quote '+_q.number+'. Do you want to create another one?', 'Create anyway', '⚠️');
+      if(!_ok) return;
+    }
+  }
   const billing = getClientBillingType(clientId);
   if(billing === 'factory-direct'){
     // Factory-direct: offer commission-invoice + upload-factory-invoice choices
@@ -2561,6 +2711,16 @@ function openClientCommissionCreate(clientId){
 }
 
 // Click-through: from factory profile to a specific client's Invoices tab
+// From the factory profile, open a client's invoice
+function openFactoryInvoiceFromFactory(clientId, invIdx){
+  showPanel('client', clientId);
+  setTimeout(() => {
+    const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+    if(tab) switchTab(tab, 'ct-invoices');
+    setTimeout(() => { try { viewInvoiceRecord(clientId, invIdx); } catch(e){} }, 100);
+  }, 140);
+}
+
 function goToClientInvoices(clientId){
   showPanel('client', clientId);
   setTimeout(() => {
@@ -2627,6 +2787,7 @@ async function commissionInvoiceChoice(clientId, idx, type){
 
 // Upload the factory's invoice-to-client as a record (not our revenue)
 let factoryToClientCtx = { clientId:null, quoteIdx:null };
+let factoryProofCtx = { clientId:null, invId:null };
 function triggerFactoryToClientUpload(clientId, idx){
   factoryToClientCtx = { clientId, quoteIdx: idx };
   document.getElementById('factory-to-client-input').click();
@@ -2634,15 +2795,17 @@ function triggerFactoryToClientUpload(clientId, idx){
 // Factory-to-client invoice: two-step document status (Received → Forwarded)
 function factoryInvStatus(clientId, invId){
   const map = lsGet('factinvstatus_'+clientId, {});
-  return map[invId] || { received:false, forwarded:false };
+  return map[invId] || { received:false, forwarded:false, paidToFactory:false, paidDate:null, proofFile:null, proofName:null };
 }
 function setFactoryInvStatus(clientId, invId, field){
   const map = lsGet('factinvstatus_'+clientId, {});
-  const cur = map[invId] || { received:false, forwarded:false };
+  const cur = map[invId] || { received:false, forwarded:false, paidToFactory:false, paidDate:null, proofFile:null, proofName:null };
   cur[field] = !cur[field];
   // Forwarded implies received
   if(field==='forwarded' && cur.forwarded) cur.received = true;
   if(field==='received' && !cur.received) cur.forwarded = false;
+  // Track paid date
+  if(field==='paidToFactory') cur.paidDate = cur.paidToFactory ? today() : null;
   map[invId] = cur;
   lsSet('factinvstatus_'+clientId, map);
   saveFactInvStatusToDrive(clientId, map);
@@ -2650,16 +2813,53 @@ function setFactoryInvStatus(clientId, invId, field){
   const inl = document.getElementById('factinv-status-'+invId);
   if(inl) inl.outerHTML = renderFactInvStatusInline(clientId, invId);
 }
+function uploadFactoryInvProof(clientId, invId){
+  factoryProofCtx = { clientId, invId };
+  document.getElementById('factory-proof-input').click();
+}
+async function handleFactoryProofUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const { clientId, invId } = factoryProofCtx;
+  const du = await readAsDataUrl(file);
+  const map = lsGet('factinvstatus_'+clientId, {});
+  const cur = map[invId] || { received:false, forwarded:false, paidToFactory:false, paidDate:null, proofFile:null, proofName:null };
+  cur.proofFile = du;
+  cur.proofName = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+  map[invId] = cur;
+  lsSet('factinvstatus_'+clientId, map);
+  saveFactInvStatusToDrive(clientId, map);
+  e.target.value='';
+  showToast('Proof of payment uploaded ✓');
+  const inl = document.getElementById('factinv-status-'+invId);
+  if(inl) inl.outerHTML = renderFactInvStatusInline(clientId, invId);
+}
+function downloadFactoryProof(clientId, invId){
+  const st = factoryInvStatus(clientId, invId);
+  if(!st.proofFile){ showToast('No proof uploaded'); return; }
+  const a = document.createElement('a');
+  a.href = st.proofFile; a.download = st.proofName || 'proof-of-payment';
+  document.body.appendChild(a); a.click(); a.remove();
+}
 function saveFactInvStatusToDrive(clientId, map){
   try { if(typeof queueDriveWrite==='function') queueDriveWrite('factinvstatus_'+clientId+'.json', map); } catch(e){}
 }
 function renderFactInvStatusInline(clientId, invId){
   const st = factoryInvStatus(clientId, invId);
   const chip = (label, on, field) => '<button onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\''+field+'\')" style="font-size:10px;padding:2px 8px;border-radius:3px;margin-left:4px;letter-spacing:0.03em;font-weight:600;cursor:pointer;border:0.5px solid '+(on?'var(--green)':'var(--border2)')+';background:'+(on?'var(--green)':'transparent')+';color:'+(on?'#fff':'var(--text3)')+'">'+(on?'✓ ':'')+label+'</button>';
-  return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center">'
+  // Paid-to-factory badge + toggle
+  const paidBadge = st.paidToFactory
+    ? '<span style="font-size:10px;background:var(--green);color:#fff;padding:2px 8px;border-radius:3px;margin-left:6px;letter-spacing:0.03em;font-weight:600;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid '+st.paidDate:'')+'">✓ Paid to factory</span>'
+    : '<span style="font-size:10px;background:transparent;color:var(--amber);border:0.5px solid var(--amber);padding:2px 8px;border-radius:3px;margin-left:6px;letter-spacing:0.03em;font-weight:600;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid to factory</span>';
+  const proofBtn = st.proofFile
+    ? '<button onclick="event.stopPropagation();downloadFactoryProof(\''+clientId+'\','+invId+')" style="font-size:10px;padding:2px 6px;margin-left:4px;border-radius:3px;border:0.5px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer" title="View proof">📎 Proof</button>'
+    : '<button onclick="event.stopPropagation();uploadFactoryInvProof(\''+clientId+'\','+invId+')" style="font-size:10px;padding:2px 6px;margin-left:4px;border-radius:3px;border:0.5px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer" title="Upload proof of payment">+ Proof</button>';
+  return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px">'
     + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600">ON FILE</span>'
     + chip('Received', st.received, 'received')
     + chip('Forwarded', st.forwarded, 'forwarded')
+    + paidBadge
+    + proofBtn
     + '</span>';
 }
 
@@ -2697,25 +2897,9 @@ async function handleFactoryToClientUpload(e){
   const invs = getClientInvoices(clientId);
   invs.unshift(inv);
   saveClientInvoices(clientId, invs);
-  // Auto-create a "Client paid factory" tracking line (unpaid — awaiting confirmation + proof)
-  try {
-    const fps = getFactoryPayments(clientId);
-    let pid = Date.now();
-    while(fps.some(p=>p.id===pid)) pid++;
-    fps.push({
-      id: pid,
-      label: 'Client payment to factory' + (q ? ' — order '+q.number : ''),
-      amount: q ? q.totalClient : 0,
-      currency: q?.cur || c?.currency || 'EUR',
-      invoiceFile: null, proofFile: null,
-      paid: false, paidDate: null,
-      notes: 'Auto-created from uploaded factory invoice. Confirm once the client has paid the factory and upload proof.'
-    });
-    saveFactoryPayments(clientId, fps);
-  } catch(err){ console.warn('auto factory-payment line failed', err); }
   closeModal('quote-modal');
   e.target.value='';
-  showToast('Factory invoice stored + payment tracking created ✓');
+  showToast('Factory invoice stored ✓');
   await renderClientDetail(clientId);
   const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
   if (tab) switchTab(tab, 'ct-invoices');
@@ -4090,6 +4274,23 @@ function themedConfirm(title, msg, okLabel, icon) {
     setTimeout(() => document.getElementById('confirm-ok-btn').focus(), 50);
   });
 }
+
+let _choiceResolve = null;
+function themedChoice(title, msg, options){
+  return new Promise(resolve => {
+    _choiceResolve = resolve;
+    const modal = document.getElementById('choice-modal');
+    document.getElementById('choice-title').textContent = title || 'Choose';
+    document.getElementById('choice-msg').textContent = msg || '';
+    const btns = document.getElementById('choice-buttons');
+    btns.innerHTML = options.map((o,i) => '<button class="btn '+(i===0?'btn-primary':(o.value==='cancel'?'':'btn'))+'" style="width:100%;margin-bottom:8px" onclick="resolveChoice(\''+o.value+'\')">'+o.label+'</button>').join('');
+    modal.classList.add('open');
+  });
+}
+function resolveChoice(val){
+  document.getElementById('choice-modal').classList.remove('open');
+  if(_choiceResolve){ _choiceResolve(val); _choiceResolve=null; }
+}
 function resolveConfirm(answer) {
   document.getElementById('confirm-modal').classList.remove('open');
   if (_confirmResolve) { _confirmResolve(answer); _confirmResolve = null; }
@@ -4761,6 +4962,44 @@ function saveFactoryPayments(clientId, arr){
 }
 
 // All factory payments across all clients linked to a given factory (for the factory profile view)
+// One-time cleanup: remove old auto-created "Client payment to factory" lines
+// (superseded by the on-invoice Paid-to-factory control)
+function cleanupAutoFactoryPayments(){
+  if(lsGet('tac_autopay_cleaned', false)) return;
+  clients.forEach(c => {
+    const fps = getFactoryPayments(c.id);
+    const filtered = fps.filter(p => !(p.notes && p.notes.includes('Auto-created from uploaded factory invoice')));
+    if(filtered.length !== fps.length){
+      saveFactoryPayments(c.id, filtered);
+    }
+  });
+  lsSet('tac_autopay_cleaned', true);
+}
+
+// Gather factory invoices (uploaded, on-file) for a factory across its clients,
+// with the client's paid-to-factory status
+function factoryInvoicesForFactory(factoryId){
+  const result = [];
+  clientsForFactory(factoryId).forEach(c => {
+    const invs = lsGet('invoices_'+c.id, []);
+    invs.forEach((inv, idx) => {
+      if(inv.isFactoryToClient){
+        const st = factoryInvStatus(c.id, inv.id);
+        result.push({
+          clientId: c.id, clientBrand: c.brand, invIdx: idx, invId: inv.id,
+          number: inv.number, date: inv.date,
+          cur: inv.cur || c.currency || 'EUR',
+          amount: inv.totalClient || 0,
+          paidToFactory: !!st.paidToFactory,
+          received: !!st.received, forwarded: !!st.forwarded
+        });
+      }
+    });
+  });
+  result.sort((a,b)=> new Date(b.date||0) - new Date(a.date||0));
+  return result;
+}
+
 function factoryPaymentsForFactory(factoryId){
   const result = [];
   clientsForFactory(factoryId).forEach(c => {
