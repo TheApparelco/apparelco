@@ -1252,6 +1252,7 @@ function downloadBackup(){
     invoices: {},
     stepfiles: {},
     factorypayments: {},
+    factinvstatus: {},
     company: lsGet('tac_company', {}),
     factories: lsGet('tac_factories', []),
     invCounter: lsGet('tac_inv_counter', '0'),
@@ -1270,6 +1271,7 @@ function downloadBackup(){
     data.invoices[c.id]    = lsGet('invoices_'+c.id, []);
     data.stepfiles[c.id]   = lsGet('stepfiles_'+c.id, {});
     data.factorypayments[c.id] = lsGet('factorypayments_'+c.id, []);
+    data.factinvstatus[c.id] = lsGet('factinvstatus_'+c.id, {});
   });
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
@@ -2081,7 +2083,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
 +'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded file">⬇ File</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -2629,6 +2631,50 @@ function triggerFactoryToClientUpload(clientId, idx){
   factoryToClientCtx = { clientId, quoteIdx: idx };
   document.getElementById('factory-to-client-input').click();
 }
+// Factory-to-client invoice: two-step document status (Received → Forwarded)
+function factoryInvStatus(clientId, invId){
+  const map = lsGet('factinvstatus_'+clientId, {});
+  return map[invId] || { received:false, forwarded:false };
+}
+function setFactoryInvStatus(clientId, invId, field){
+  const map = lsGet('factinvstatus_'+clientId, {});
+  const cur = map[invId] || { received:false, forwarded:false };
+  cur[field] = !cur[field];
+  // Forwarded implies received
+  if(field==='forwarded' && cur.forwarded) cur.received = true;
+  if(field==='received' && !cur.received) cur.forwarded = false;
+  map[invId] = cur;
+  lsSet('factinvstatus_'+clientId, map);
+  saveFactInvStatusToDrive(clientId, map);
+  // Re-render in place, stay on invoices tab
+  const inl = document.getElementById('factinv-status-'+invId);
+  if(inl) inl.outerHTML = renderFactInvStatusInline(clientId, invId);
+}
+function saveFactInvStatusToDrive(clientId, map){
+  try { if(typeof queueDriveWrite==='function') queueDriveWrite('factinvstatus_'+clientId+'.json', map); } catch(e){}
+}
+function renderFactInvStatusInline(clientId, invId){
+  const st = factoryInvStatus(clientId, invId);
+  const chip = (label, on, field) => '<button onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\''+field+'\')" style="font-size:10px;padding:2px 8px;border-radius:3px;margin-left:4px;letter-spacing:0.03em;font-weight:600;cursor:pointer;border:0.5px solid '+(on?'var(--green)':'var(--border2)')+';background:'+(on?'var(--green)':'transparent')+';color:'+(on?'#fff':'var(--text3)')+'">'+(on?'✓ ':'')+label+'</button>';
+  return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center">'
+    + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600">ON FILE</span>'
+    + chip('Received', st.received, 'received')
+    + chip('Forwarded', st.forwarded, 'forwarded')
+    + '</span>';
+}
+
+// Download/view the uploaded factory invoice file
+function downloadFactoryInvoiceFile(clientId, idx){
+  const inv = getClientInvoices(clientId)[idx];
+  if(!inv || !inv.fileData){ showToast('No file attached'); return; }
+  const a = document.createElement('a');
+  a.href = inv.fileData;
+  a.download = inv.fileName || ('factory-invoice-'+(inv.number||'')+'.pdf');
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 async function handleFactoryToClientUpload(e){
   const file = e.target.files[0];
   if(!file) return;
@@ -2651,10 +2697,28 @@ async function handleFactoryToClientUpload(e){
   const invs = getClientInvoices(clientId);
   invs.unshift(inv);
   saveClientInvoices(clientId, invs);
+  // Auto-create a "Client paid factory" tracking line (unpaid — awaiting confirmation + proof)
+  try {
+    const fps = getFactoryPayments(clientId);
+    let pid = Date.now();
+    while(fps.some(p=>p.id===pid)) pid++;
+    fps.push({
+      id: pid,
+      label: 'Client payment to factory' + (q ? ' — order '+q.number : ''),
+      amount: q ? q.totalClient : 0,
+      currency: q?.cur || c?.currency || 'EUR',
+      invoiceFile: null, proofFile: null,
+      paid: false, paidDate: null,
+      notes: 'Auto-created from uploaded factory invoice. Confirm once the client has paid the factory and upload proof.'
+    });
+    saveFactoryPayments(clientId, fps);
+  } catch(err){ console.warn('auto factory-payment line failed', err); }
   closeModal('quote-modal');
   e.target.value='';
-  showToast('Factory invoice stored ✓');
-  renderClientDetail(clientId);
+  showToast('Factory invoice stored + payment tracking created ✓');
+  await renderClientDetail(clientId);
+  const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+  if (tab) switchTab(tab, 'ct-invoices');
 }
 
 // PAYMENTS & INVOICE RECORDS
@@ -4456,6 +4520,9 @@ async function restoreFromBackup(file) {
       });
       Object.keys(data.factorypayments || {}).forEach(cid => {
         lsSet('factorypayments_' + cid, data.factorypayments[cid]);
+      });
+      Object.keys(data.factinvstatus || {}).forEach(cid => {
+        lsSet('factinvstatus_' + cid, data.factinvstatus[cid]);
       });
       
       // Restore global settings if backup has them
