@@ -869,6 +869,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="modal-actions"><button class="btn" onclick="closeModal('factory-modal')">Cancel</button><button class="btn btn-primary" id="factory-save-btn" onclick="saveFactory()">Save factory</button></div>
 </div></div>
 
+<div class="overlay" id="factory-commission-modal"><div class="modal" style="width:560px">
+  <div class="modal-title">Create commission invoice</div>
+  <div id="factory-commission-body"></div>
+  <div class="modal-actions" style="margin-top:14px"><button class="btn" onclick="closeModal('factory-commission-modal')">Close</button></div>
+</div></div>
+
 <div class="overlay" id="factory-pay-modal"><div class="modal" style="width:540px">
   <div class="modal-title">Factory payment</div>
   <div class="grid2">
@@ -1772,7 +1778,26 @@ function renderFactoryDetail(id){
   
   // Factory payments across all linked clients (synced view)
   const allPayments = factoryPaymentsForFactory(f.id);
-  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">💸 Payments to this factory</span><span style="font-size:11px;color:var(--text3)">across '+perf.linkedCount+' client'+(perf.linkedCount!==1?'s':'')+'</span></div><div class="card-body">';
+  // ── Commission revenue (money IN from this factory) ──
+  const commInvs = commissionInvoicesForFactory(f.id);
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">💰 Commission invoices</span><button class="btn btn-sm btn-primary" onclick="openFactoryCommissionCreate(\''+f.id+'\')">+ New commission invoice</button></div><div class="card-body">';
+  if(commInvs.length){
+    let commPaid=0, commDue=0;
+    commInvs.forEach(ci => {
+      const rem = Math.max(0, ci.amountDue - ci.amountPaid);
+      const isPaid = ci.amountPaid >= ci.amountDue && ci.amountDue > 0;
+      if(isPaid) commPaid += toReportingCurrency(ci.amountDue, ci.cur);
+      else { commPaid += toReportingCurrency(ci.amountPaid, ci.cur); commDue += toReportingCurrency(rem, ci.cur); }
+      const badge = isPaid ? '<span class="badge-xs badge-active">Paid</span>' : (ci.amountPaid>0 ? '<span class="badge-xs badge-sample">Partial</span>' : '<span class="badge-xs badge-sample">Unpaid</span>');
+      html += '<div onclick="goToClientInvoices(\''+ci.clientId+'\')" style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:0.5px solid var(--border2);font-size:13px"><span style="flex:1"><strong>'+ci.clientBrand+'</strong> · '+ci.number+(ci.typeLabel||'')+'</span><span style="color:var(--text2)">'+fmtMoney(ci.amountDue,ci.cur)+'</span>'+badge+'</div>';
+    });
+    const rcSym = sym(getReportingCurrency());
+    html += '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;font-size:13px"><span style="color:var(--text3)">Received: <strong style="color:var(--green)">'+rcSym+commPaid.toFixed(0)+'</strong></span><span style="color:var(--text3)">Outstanding: <strong style="color:var(--amber)">'+rcSym+commDue.toFixed(0)+'</strong></span></div>';
+  } else {
+    html += '<div style="font-size:12px;color:var(--text3);padding:4px 0">No commission invoices yet. These are created for factory-direct clients.</div>';
+  }
+  html += '</div></div>';
+    html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">💸 Payments to this factory</span><span style="font-size:11px;color:var(--text3)">across '+perf.linkedCount+' client'+(perf.linkedCount!==1?'s':'')+'</span></div><div class="card-body">';
   if(allPayments.length){
     let totalPaid=0, totalDue=0;
     allPayments.forEach(p => {
@@ -2054,8 +2079,8 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +'<div id="ct-quotes" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Quotes</span><button class="btn btn-sm" onclick="openNewQuote(\''+id+'\')">+ New quote</button></div><div>'
 +(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
-+'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div></div><div>'
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -2476,6 +2501,117 @@ function openFactoryDirectInvoiceChoice(clientId, idx){
   }
   if(actions) actions.innerHTML = '<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button>';
   document.getElementById('quote-modal').classList.add('open');
+}
+
+// Gather all commission invoices raised to a factory (across all its clients)
+function commissionInvoicesForFactory(factoryId){
+  const result = [];
+  clients.forEach(c => {
+    if(String(c.factoryId) !== String(factoryId)) return;
+    const invs = lsGet('invoices_'+c.id, []);
+    invs.forEach((inv, idx) => {
+      if(inv.isCommission){
+        result.push({
+          clientId: c.id,
+          clientBrand: c.brand,
+          invIdx: idx,
+          number: inv.number,
+          date: inv.date,
+          cur: inv.cur || c.currency || 'EUR',
+          amountDue: inv.amountDue != null ? inv.amountDue : (inv.totalClient||0),
+          amountPaid: inv.amountPaid || 0,
+          typeLabel: inv.typeLabel || '',
+          profit: inv.profit || 0
+        });
+      }
+    });
+  });
+  // Most recent first
+  result.sort((a,b)=> new Date(b.date||0) - new Date(a.date||0));
+  return result;
+}
+
+// Create commission invoice from the CLIENT's Invoices tab — pick which quote
+function openClientCommissionCreate(clientId){
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  if(!c) return;
+  const quotes = lsGet('quotes_'+clientId, []).map((q,qi)=>({q,qi})).filter(o=>!o.q.isSample);
+  if(!quotes.length){
+    themedAlert('No quotes available','Create a production quote first. Commission invoices are generated from a quote.','ℹ️');
+    return;
+  }
+  const modal = document.getElementById('factory-commission-modal');
+  const body = document.getElementById('factory-commission-body');
+  let html = '<p style="font-size:13px;color:var(--text2);margin-bottom:12px">Invoice the factory for your commission on '+c.brand+'. Select the quote:</p><div style="max-height:340px;overflow-y:auto">';
+  quotes.forEach(({q,qi}) => {
+    html += '<div style="border:0.5px solid var(--border2);border-radius:8px;padding:11px;margin-bottom:8px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><span style="font-weight:600;font-size:13px">'+q.number+'</span><span style="font-size:13px;color:var(--accent)">Commission '+sym(q.cur||c.currency||'EUR')+(q.profit||0).toFixed(2)+'</span></div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + '<button class="btn btn-xs btn-primary" onclick="factoryCommissionCreate(\''+clientId+'\','+qi+',\'deposit\')">50% Deposit</button>'
+        + '<button class="btn btn-xs btn-primary" onclick="factoryCommissionCreate(\''+clientId+'\','+qi+',\'balance\')">50% Balance</button>'
+        + '<button class="btn btn-xs" onclick="factoryCommissionCreate(\''+clientId+'\','+qi+',\'full\')">Full</button>'
+      + '</div></div>';
+  });
+  html += '</div>';
+  body.innerHTML = html;
+  modal.classList.add('open');
+}
+
+// Click-through: from factory profile to a specific client's Invoices tab
+function goToClientInvoices(clientId){
+  showPanel('client', clientId);
+  setTimeout(() => {
+    const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+    if(tab) switchTab(tab, 'ct-invoices');
+  }, 120);
+}
+
+// Create a commission invoice from the FACTORY profile — pick which client + quote
+function openFactoryCommissionCreate(factoryId){
+  // Find factory-direct clients linked to this factory that have accepted quotes
+  const linked = clients.filter(c => String(c.factoryId) === String(factoryId));
+  const options = [];
+  linked.forEach(c => {
+    const quotes = lsGet('quotes_'+c.id, []);
+    quotes.forEach((q, qi) => {
+      if(q.isSample) return;
+      options.push({ clientId:c.id, brand:c.brand, quoteIdx:qi, number:q.number, profit:q.profit||0, cur:q.cur||c.currency||'EUR', billing:(c.billingType||'standard') });
+    });
+  });
+  if(!options.length){
+    themedAlert('No quotes available','Create a quote for a client linked to this factory first. Commission invoices are generated from a quote.','ℹ️');
+    return;
+  }
+  const modal = document.getElementById('factory-commission-modal');
+  const body = document.getElementById('factory-commission-body');
+  let html = '<p style="font-size:13px;color:var(--text2);margin-bottom:12px">Select the client quote to invoice the factory for your commission:</p>';
+  html += '<div style="max-height:340px;overflow-y:auto">';
+  options.forEach((o, i) => {
+    const tag = o.billing==='factory-direct' ? '<span class="badge-xs badge-active" style="margin-left:6px">factory-direct</span>' : '<span class="badge-xs" style="margin-left:6px;background:var(--surface3);color:var(--text3)">standard</span>';
+    html += '<div style="border:0.5px solid var(--border2);border-radius:8px;padding:11px;margin-bottom:8px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><span style="font-weight:600;font-size:13px">'+o.brand+' · '+o.number+tag+'</span><span style="font-size:13px;color:var(--accent)">Commission '+sym(o.cur)+(o.profit||0).toFixed(2)+'</span></div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + '<button class="btn btn-xs btn-primary" onclick="factoryCommissionCreate(\''+o.clientId+'\','+o.quoteIdx+',\'deposit\')">50% Deposit</button>'
+        + '<button class="btn btn-xs btn-primary" onclick="factoryCommissionCreate(\''+o.clientId+'\','+o.quoteIdx+',\'balance\')">50% Balance</button>'
+        + '<button class="btn btn-xs" onclick="factoryCommissionCreate(\''+o.clientId+'\','+o.quoteIdx+',\'full\')">Full</button>'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  body.innerHTML = html;
+  modal.classList.add('open');
+}
+
+function factoryCommissionCreate(clientId, quoteIdx, type){
+  closeModal('factory-commission-modal');
+  createCommissionInvoiceFromQuote(clientId, quoteIdx, type);
+  // Refresh whichever view is currently active
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  const factoryPanel = document.getElementById('panel-factory');
+  const onFactory = factoryPanel && factoryPanel.classList.contains('active');
+  if(onFactory && c && c.factoryId){
+    renderFactoryDetail(c.factoryId);
+  }
 }
 
 function commissionInvoiceChoice(clientId, idx, type){
