@@ -2876,17 +2876,17 @@ function renderFactInvStatusInline(clientId, invId){
   const chip = (label, on, field) => '<button onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\''+field+'\')" style="font-size:10px;padding:2px 8px;border-radius:3px;margin-left:4px;letter-spacing:0.03em;font-weight:600;cursor:pointer;border:0.5px solid '+(on?'var(--green)':'var(--border2)')+';background:'+(on?'var(--green)':'transparent')+';color:'+(on?'#fff':'var(--text3)')+'">'+(on?'✓ ':'')+label+'</button>';
   // Paid-to-factory badge — matches the normal invoice paid-badge style
   const paidBadge = st.paidToFactory
-    ? '<span class="paid-badge paid" style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid to factory '+st.paidDate:'')+'">Paid to factory</span>'
-    : '<span class="paid-badge unpaid" style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid</span>';
+    ? '<span class="paid-badge paid" style="cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid to factory '+st.paidDate:'')+'">Paid to factory</span>'
+    : '<span class="paid-badge unpaid" style="cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid</span>';
   const proofBtn = st.proofFile
     ? '<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryProof(\''+clientId+'\','+invId+')" title="View proof of payment">📎 Proof</button>'
     : '<button class="btn btn-xs btn-green" onclick="event.stopPropagation();uploadFactoryInvProof(\''+clientId+'\','+invId+')" title="Upload proof of payment">+ Proof</button>';
   return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px">'
-    + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600">ON FILE</span>'
-    + chip('Received', st.received, 'received')
-    + chip('Forwarded', st.forwarded, 'forwarded')
     + paidBadge
     + proofBtn
+    + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600;margin-left:6px">ON FILE</span>'
+    + chip('Received', st.received, 'received')
+    + chip('Forwarded', st.forwarded, 'forwarded')
     + '</span>';
 }
 
@@ -2902,6 +2902,7 @@ function downloadFactoryInvoiceFile(clientId, idx){
   a.remove();
 }
 
+let pendingFactoryUpload = null;
 async function handleFactoryToClientUpload(e){
   const file = e.target.files[0];
   if(!file) return;
@@ -2910,22 +2911,120 @@ async function handleFactoryToClientUpload(e){
   const c = clients.find(x=>String(x.id)===String(clientId));
   const du = await readAsDataUrl(file);
   const nm = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
+  e.target.value='';
+  // Pre-fill the editable line list from the quote's styles so you can match the factory's actual invoice
+  const lines = (q && q.styles ? q.styles : []).map(g => ({
+    desc: g.desc||'', sizes: g.sizes||'', units: g.units||0,
+    price: (g.ppu!=null ? g.ppu : (g.fp!=null ? g.fp*(1+(g.co||0)/100) : 0))
+  }));
+  pendingFactoryUpload = {
+    clientId, quoteIdx, q, c, fileName:nm, fileData:du,
+    lines: lines,
+    iva: (q && q.iva) ? q.iva : 0,
+    ship: (q && q.ship) ? q.ship : 0
+  };
+  openFactoryInvoiceAdjust();
+}
+function openFactoryInvoiceAdjust(){
+  const p = pendingFactoryUpload; if(!p) return;
+  const s = sym(p.q?.cur || p.c?.currency || 'EUR');
+  const linesHtml = p.lines.map((ln,i)=>
+    '<div class="style-block" style="margin-bottom:8px;padding:10px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;font-weight:600;color:var(--text3)">Line '+(i+1)+'</span><button class="btn btn-xs btn-danger" onclick="removeFactoryLine('+i+')">✕</button></div>'
+    + '<div class="grid2" style="margin-bottom:6px"><div class="field" style="margin:0"><label>Description</label><input value="'+(ln.desc||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryLine('+i+',\'desc\',this.value)"></div><div class="field" style="margin:0"><label>Size range</label><input value="'+(ln.sizes||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryLine('+i+',\'sizes\',this.value)"></div></div>'
+    + '<div class="grid3"><div class="field" style="margin:0"><label>Units</label><input type="number" value="'+(ln.units||0)+'" oninput="updateFactoryLine('+i+',\'units\',this.value)"></div><div class="field" style="margin:0"><label>Unit price ('+s+')</label><input type="number" step="0.01" value="'+(ln.price!=null?ln.price:0)+'" oninput="updateFactoryLine('+i+',\'price\',this.value)"></div><div class="field" style="margin:0"><label>Line total</label><input value="'+s+((ln.units||0)*(ln.price||0)).toFixed(2)+'" disabled style="opacity:0.6"></div></div>'
+    + '</div>'
+  ).join('');
+  const extrasHtml = (p.extraLines||[]).map((ln,i)=>
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input placeholder="Description (e.g. Dye service)" value="'+(ln.desc||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryExtra('+i+',\'desc\',this.value)" style="flex:1"><input type="number" step="0.01" placeholder="0.00" value="'+(ln.amount||'')+'" oninput="updateFactoryExtra('+i+',\'amount\',this.value)" style="width:100px"><button class="btn btn-xs btn-danger" onclick="removeFactoryExtra('+i+')">✕</button></div>'
+  ).join('');
+  const body = '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Edit every line so this record matches the factory\'s actual invoice exactly — that way you can check the details here later without opening the PDF.</div>'
+    + '<div style="max-height:52vh;overflow-y:auto">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Line items</div>'
+    + '<div id="fa-lines">'+linesHtml+'</div>'
+    + '<button class="btn btn-xs" onclick="addFactoryLine()" style="margin-bottom:14px">+ Add line item</button>'
+    + '<div class="grid2" style="margin-bottom:10px"><div class="field" style="margin:0"><label>IVA (%)</label><input id="fa-iva" type="number" value="'+(p.iva||0)+'" oninput="recalcFactoryAdjust()"></div><div class="field" style="margin:0"><label>Shipping ('+s+')</label><input id="fa-ship" type="number" step="0.01" placeholder="0.00" value="'+(p.ship||'')+'" oninput="recalcFactoryAdjust()"></div></div>'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Extra lines (services, dye, etc.)</div>'
+    + '<div id="fa-extras">'+extrasHtml+'</div>'
+    + '<button class="btn btn-xs" onclick="addFactoryExtra()">+ Add extra line</button>'
+    + '</div>'
+    + '<div id="fa-total" style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>';
+  document.getElementById('quote-modal-title').textContent = 'Factory invoice — match the details';
+  document.getElementById('quote-modal-body').innerHTML = body
+    + '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn" style="flex:1" onclick="cancelFactoryUpload()">Cancel</button><button class="btn btn-primary" style="flex:1" onclick="confirmFactoryInvoiceUpload()">Store factory invoice</button></div>';
+  document.getElementById('quote-modal').classList.add('open');
+  recalcFactoryAdjust();
+}
+function computeFactoryAdjustParts(){
+  const p = pendingFactoryUpload; if(!p) return {sub:0,ivaAmt:0,ship:0,extras:0,total:0,iva:0};
+  const sub = (p.lines||[]).reduce((a,ln)=>a+((ln.units||0)*(ln.price||0)),0);
+  const ivaEl = document.getElementById('fa-iva');
+  const iva = ivaEl ? parseNum(ivaEl.value,0) : (p.iva||0);
+  const ivaAmt = sub*(iva/100);
+  const shipEl = document.getElementById('fa-ship');
+  const ship = shipEl ? parseNum(shipEl.value,0) : (p.ship||0);
+  const extras = (p.extraLines||[]).reduce((a,ln)=>a+parseNum(ln.amount,0),0);
+  return { sub, iva, ivaAmt, ship, extras, total: sub+ivaAmt+ship+extras };
+}
+function computeFactoryAdjustTotal(){ return computeFactoryAdjustParts().total; }
+function recalcFactoryAdjust(){
+  const p = pendingFactoryUpload; if(!p) return;
+  const s = sym(p.q?.cur || p.c?.currency || 'EUR');
+  const t = computeFactoryAdjustParts();
+  const el = document.getElementById('fa-total');
+  if(el){
+    el.innerHTML = '<div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>'+s+t.sub.toFixed(2)+'</span></div>'
+      + (t.ivaAmt?'<div style="display:flex;justify-content:space-between"><span>IVA ('+t.iva+'%)</span><span>'+s+t.ivaAmt.toFixed(2)+'</span></div>':'')
+      + (t.ship?'<div style="display:flex;justify-content:space-between"><span>Shipping</span><span>'+s+t.ship.toFixed(2)+'</span></div>':'')
+      + (t.extras?'<div style="display:flex;justify-content:space-between"><span>Extra lines</span><span>'+s+t.extras.toFixed(2)+'</span></div>':'')
+      + '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid var(--border2);margin-top:6px;padding-top:6px;font-size:14px"><span>Factory invoice total</span><span>'+s+t.total.toFixed(2)+'</span></div>';
+  }
+}
+function addFactoryLine(){ pendingFactoryUpload.lines.push({desc:'',sizes:'',units:0,price:0}); openFactoryInvoiceAdjust(); }
+function removeFactoryLine(i){ pendingFactoryUpload.lines.splice(i,1); openFactoryInvoiceAdjust(); }
+function updateFactoryLine(i,field,val){
+  const ln = pendingFactoryUpload.lines[i]; if(!ln) return;
+  ln[field] = (field==='units'||field==='price') ? parseNum(val,0) : val;
+  recalcFactoryAdjust();
+  // Update the line-total display without full re-render
+  const block = document.querySelectorAll('#fa-lines .style-block')[i];
+  if(block){ const inps = block.querySelectorAll('input'); const s=sym(pendingFactoryUpload.q?.cur||'EUR'); if(inps[4]) inps[4].value = s+((ln.units||0)*(ln.price||0)).toFixed(2); }
+}
+if(!pendingFactoryUpload || !pendingFactoryUpload.extraLines){ /* ensure extraLines exists lazily */ }
+function addFactoryExtra(){ if(!pendingFactoryUpload.extraLines) pendingFactoryUpload.extraLines=[]; pendingFactoryUpload.extraLines.push({desc:'',amount:''}); openFactoryInvoiceAdjust(); }
+function removeFactoryExtra(i){ pendingFactoryUpload.extraLines.splice(i,1); openFactoryInvoiceAdjust(); }
+function updateFactoryExtra(i,field,val){ if(pendingFactoryUpload.extraLines[i]){ pendingFactoryUpload.extraLines[i][field]=val; recalcFactoryAdjust(); } }
+
+function cancelFactoryUpload(){
+  pendingFactoryUpload = null;
+  closeModal('quote-modal');
+}
+async function confirmFactoryInvoiceUpload(){
+  const p = pendingFactoryUpload; if(!p) return;
+  const parts = computeFactoryAdjustParts();
+  const { clientId, q, c } = p;
   const inv = {
     id: Date.now(),
     number: 'FACT-'+(q?q.number:'')+'-'+Date.now().toString().slice(-4),
     date: today(),
     cur: q?.cur || c?.currency || 'EUR',
     isFactoryToClient: true,       // record only — excluded from revenue
-    totalClient: q ? q.totalClient : 0,
+    // Full line items so you can review details later without opening the PDF
+    styles: (p.lines||[]).map(ln=>({ desc:ln.desc||'', sizes:ln.sizes||'', units:ln.units||0, ppu:ln.price||0, fp:ln.price||0, co:0, subtotal:(ln.units||0)*(ln.price||0) })),
+    iva: parts.iva, ivaAmt: parts.ivaAmt,
+    ship: parts.ship, factoryShip: parts.ship,
+    factoryExtras: (p.extraLines||[]).filter(l=>l.desc||l.amount).map(l=>({desc:l.desc||'Extra',amount:parseNum(l.amount,0)})),
+    stylesSub: parts.sub,
+    totalClient: parts.total,
     amountDue: 0, amountPaid: 0, payments: [],
-    fileName: nm, fileData: du,
+    fileName: p.fileName, fileData: p.fileData,
     fromQuote: q ? q.number : ''
   };
   const invs = getClientInvoices(clientId);
   invs.unshift(inv);
   saveClientInvoices(clientId, invs);
+  pendingFactoryUpload = null;
   closeModal('quote-modal');
-  e.target.value='';
   showToast('Factory invoice stored ✓');
   await renderClientDetail(clientId);
   const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
@@ -3467,6 +3566,7 @@ function renderInvoiceDoc(clientId, idx) {
       ? '<tr><td>'+(co.commissionLabel||'Agent Fee')+' — '+(c?.brand||'')+(inv.fromQuote?', order '+inv.fromQuote:'')+(inv.typeLabel||'')+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td></tr>'
       : (inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')) +
     (!inv.isCommission && inv.ivaAmt?'<tr><td>IVA ('+inv.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'') +
+    ((inv.factoryExtras||[]).map(x=>'<tr><td>'+x.desc+'</td><td></td><td></td><td style="text-align:right">'+s+(x.amount||0).toFixed(2)+'</td></tr>').join('')) +
     (inv.shipTBD?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right;font-style:italic;color:#999">to be determined</td></tr>':(inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')) +
     (inv.isSample && inv.protoFee ? '<tr><td><strong>Prototype Development Fee</strong><div style="font-size:10px;color:#888;font-style:italic">Refundable on bulk production within 60 days of approval</div></td><td></td><td></td><td style="text-align:right">'+s+inv.protoFee.toFixed(2)+'</td></tr>' : '') +
     (inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('') +
