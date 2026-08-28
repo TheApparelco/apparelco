@@ -1517,6 +1517,7 @@ function calcNeedsAttention(){
     // 2. Overdue invoices (production)
     invoices.forEach(inv => {
       if(inv.isSample) return;
+      if(inv.isFactoryToClient) return; // tracked separately on the factory invoice + profile
       if(isPaid(inv)) return;
       if(!inv.date) return;
       const dueDays = parseInt(inv.due) || 14;
@@ -2117,7 +2118,7 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs" onclick="event.stopPropagation();editQuote(\''+id+'\','+i+')" title="Edit quote">✎ Edit</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
 +'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button><button class="btn btn-sm" onclick="createShippingInvoice(\''+id+'\')" title="Create a standalone shipping invoice">🚚 Shipping invoice</button></div></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?'<button class="btn btn-xs btn-primary" onclick="event.stopPropagation();viewCoBrandedClientInvoice(\''+id+'\','+i+')" title="View/send the client invoice">📄 Client invoice</button>'+(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded factory file">⬇ Factory file</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button>'+(!inv.isCommission?'<button class="btn btn-xs" onclick="event.stopPropagation();editInvoice(\''+id+'\','+i+')" title="Edit invoice">✎ Edit</button>':'')+'<button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?'<button class="btn btn-xs btn-primary" onclick="event.stopPropagation();viewCoBrandedClientInvoice(\''+id+'\','+i+')" title="View/send the client invoice">📄 Client invoice</button><button class="btn btn-xs" onclick="event.stopPropagation();editFactoryInvoice(\''+id+'\','+i+')" title="Edit">✎ Edit</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button>'+(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded factory file">⬇ Factory file</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button>'+(!inv.isCommission?'<button class="btn btn-xs" onclick="event.stopPropagation();editInvoice(\''+id+'\','+i+')" title="Edit invoice">✎ Edit</button>':'')+'<button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -2873,25 +2874,24 @@ function saveFactInvStatusToDrive(clientId, map){
 }
 function renderFactInvStatusInline(clientId, invId){
   const st = factoryInvStatus(clientId, invId);
+  // Find the invoice to read its payment status (like normal invoices)
+  const invs = getClientInvoices(clientId);
+  const inv = invs.find(i => i.id === invId) || invs.find(i => String(i.id)===String(invId));
+  const paidAmt = inv ? (inv.amountPaid||0) : 0;
+  const dueAmt = inv ? (inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)) : 0;
+  const isPaidFull = inv && paidAmt >= dueAmt && dueAmt > 0;
+  const isPartial = paidAmt > 0 && !isPaidFull;
+  const payClass = isPaidFull ? 'paid' : (isPartial ? 'partial' : 'unpaid');
+  const payLabel = isPaidFull ? 'Paid' : (isPartial ? 'Partial' : 'Unpaid');
+  const paidBadge = '<span class="paid-badge '+payClass+'">'+payLabel+'</span>';
   const chip = (label, on, field) => '<button onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\''+field+'\')" style="font-size:10px;padding:2px 8px;border-radius:3px;margin-left:4px;letter-spacing:0.03em;font-weight:600;cursor:pointer;border:0.5px solid '+(on?'var(--green)':'var(--border2)')+';background:'+(on?'var(--green)':'transparent')+';color:'+(on?'#fff':'var(--text3)')+'">'+(on?'✓ ':'')+label+'</button>';
-  // Paid-to-factory badge — matches the normal invoice paid-badge style
-  const paidBadge = st.paidToFactory
-    ? '<span class="paid-badge paid" style="cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid to factory '+st.paidDate:'')+'">Paid to factory</span>'
-    : '<span class="paid-badge unpaid" style="cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid</span>';
-  const proofBtn = st.proofFile
-    ? '<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryProof(\''+clientId+'\','+invId+')" title="View proof of payment">📎 Proof</button>'
-    : '<button class="btn btn-xs btn-green" onclick="event.stopPropagation();uploadFactoryInvProof(\''+clientId+'\','+invId+')" title="Upload proof of payment">+ Proof</button>';
   return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px">'
     + paidBadge
-    + proofBtn
     + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600;margin-left:6px">ON FILE</span>'
     + chip('Received', st.received, 'received')
     + chip('Forwarded', st.forwarded, 'forwarded')
     + '</span>';
 }
-
-// Generate the co-branded CLIENT-FACING invoice for a factory-direct order.
-// Header blends "The Apparel Co × [Factory]", payment details are the FACTORY's, term reflected.
 function renderCoBrandedClientInvoice(clientId, idx){
   const c = clients.find(x=>String(x.id)===String(clientId));
   const inv = getClientInvoices(clientId)[idx];
@@ -2900,6 +2900,8 @@ function renderCoBrandedClientInvoice(clientId, idx){
   const s = sym(inv.cur||c?.currency||'EUR');
   const factoryName = inv.coBrand || '';
   const coName = co.name + (factoryName ? ' \u2013 ' + factoryName : '');
+  const factoryObj = getFactory(inv.factoryId);
+  const headerAddress = (factoryObj && factoryObj.address) ? factoryObj.address : (co.address||'');
   const logo = (typeof getLogoHtml==='function') ? getLogoHtml(false) : '';
   const term = inv.factoryTerm || 'full';
   const termLabel = inv.factoryTermLabel || '';
@@ -2919,7 +2921,7 @@ function renderCoBrandedClientInvoice(clientId, idx){
   return '<div class="doc-white" style="padding:32px;background:#fff;color:#222;font-family:Inter,system-ui,sans-serif">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'
     + '<div>'+logo+'<div style="font-size:18px;font-weight:700;margin-top:6px">'+coName+'</div>'
-    + '<div style="font-size:11px;color:#666;margin-top:2px">'+(co.address||'')+(co.email?' \u00b7 '+co.email:'')+'</div></div>'
+    + '<div style="font-size:11px;color:#666;margin-top:2px">'+headerAddress+'</div></div>'
     + '<div style="text-align:right"><div style="font-size:22px;font-weight:700;letter-spacing:0.02em">INVOICE</div>'
     + '<div style="font-size:12px;color:#666">'+(inv.number||'')+termLabel+'</div>'
     + '<div style="font-size:12px;color:#666">'+fmtDate(inv.date)+'</div></div>'
@@ -2935,8 +2937,10 @@ function renderCoBrandedClientInvoice(clientId, idx){
     + '</tbody></table>'
     + '<hr style="border:none;border-top:0.5px solid #ddd;margin:14px 0">'
     + '<div style="max-width:280px;margin-left:auto;font-size:13px">'
-    + '<div style="display:flex;justify-content:space-between"><span>Order total</span><span>'+s+(inv.totalClient||0).toFixed(2)+'</span></div>'
-    + ((term==='deposit'||term==='balance')?'<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>'+(term==='deposit'?'50% Deposit due':'50% Balance due')+'</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>':'<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>Total due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>')
+    + '<div style="display:flex;justify-content:space-between"><span>Order total (goods)</span><span>'+s+((inv.totalClient||0) - (inv.ship||0)).toFixed(2)+'</span></div>'
+    + (term==='balance' && inv.ship ? '<div style="display:flex;justify-content:space-between;color:#666;font-size:12px"><span>Shipping (full, on balance)</span><span>'+s+inv.ship.toFixed(2)+'</span></div>':'')
+    + (term==='full' && inv.ship ? '<div style="display:flex;justify-content:space-between;color:#666;font-size:12px"><span>Shipping</span><span>'+s+inv.ship.toFixed(2)+'</span></div>':'')
+    + ((term==='deposit'||term==='balance')?'<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>'+(term==='deposit'?'50% Deposit due':'50% Balance + shipping due')+'</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>':'<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>Total due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>')
     + '</div>'
     + bankBlock
     + (co.invoiceFooter?'<div style="margin-top:16px;font-size:11px;color:#999;text-align:center">'+co.invoiceFooter+'</div>':'')
@@ -2947,8 +2951,24 @@ function viewCoBrandedClientInvoice(clientId, idx){
   if(!inv){ showToast('Invoice not found'); return; }
   document.getElementById('quote-modal-title').textContent = 'Client invoice — '+(inv.number||'');
   document.getElementById('quote-modal-body').innerHTML = renderCoBrandedClientInvoice(clientId, idx)
-    + '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn" style="flex:1" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-primary" style="flex:1" onclick="printCoBrandedClientInvoice(\''+clientId+'\','+idx+')">⬇ Download / Print</button></div>';
+    + '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
+    + '<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button>'
+    + '<button class="btn" onclick="downloadCoBrandedPDF(\''+clientId+'\','+idx+')">⬇ PDF</button>'
+    + '<button class="btn" onclick="downloadCoBrandedHTML(\''+clientId+'\','+idx+')">⬇ HTML</button>'
+    + '<button class="btn btn-green" onclick="openPaymentModal(\''+clientId+'\','+idx+')">+ Payment</button>'
+    + '</div>';
   document.getElementById('quote-modal').classList.add('open');
+}
+function downloadCoBrandedPDF(clientId, idx){ printCoBrandedClientInvoice(clientId, idx); }
+function downloadCoBrandedHTML(clientId, idx){
+  const html = renderCoBrandedClientInvoice(clientId, idx);
+  const inv = getClientInvoices(clientId)[idx];
+  const blob = new Blob(['<html><head><meta charset="utf-8"><title>Invoice '+(inv.number||'')+'</title></head><body>'+html+'</body></html>'], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'invoice-'+(inv.number||'')+'.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
 }
 function printCoBrandedClientInvoice(clientId, idx){
   const html = renderCoBrandedClientInvoice(clientId, idx);
@@ -2982,6 +3002,7 @@ async function handleFactoryToClientUpload(e){
   const du = await readAsDataUrl(file);
   const nm = file.name.replace(/[^a-zA-Z0-9._\-()\s]/g,'_');
   e.target.value='';
+  editingFactoryInvoice = null; // fresh upload, not an edit
   // Pre-fill the editable line list from the quote's styles so you can match the factory's actual invoice
   const lines = (q && q.styles ? q.styles : []).map(g => ({
     desc: g.desc||'', sizes: g.sizes||'', units: g.units||0,
@@ -2996,6 +3017,28 @@ async function handleFactoryToClientUpload(e){
   openFactoryInvoiceAdjust();
 }
 function setFactoryUploadTerm(term){ if(pendingFactoryUpload){ pendingFactoryUpload.term = term; openFactoryInvoiceAdjust(); } }
+// Edit an existing factory invoice — reopen the adjust editor prefilled, update on save
+let editingFactoryInvoice = null;
+function editFactoryInvoice(clientId, idx){
+  const inv = getClientInvoices(clientId)[idx];
+  if(!inv || !inv.isFactoryToClient){ showToast('Not a factory invoice'); return; }
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  editingFactoryInvoice = { clientId, idx, invId: inv.id };
+  // Rebuild the pending upload structure from the stored invoice
+  pendingFactoryUpload = {
+    clientId, quoteIdx: null,
+    q: { number: inv.fromQuote, cur: inv.cur, totalClient: inv.totalClient },
+    c,
+    fileName: inv.fileName, fileData: inv.fileData,
+    lines: (inv.styles||[]).map(g=>({ desc:g.desc||'', sizes:g.sizes||'', units:g.units||0, price:(g.ppu!=null?g.ppu:g.fp)||0 })),
+    extraLines: (inv.factoryExtras||[]).map(x=>({ desc:x.desc||'', amount:x.amount||'' })),
+    iva: inv.iva||0,
+    ship: inv.ship||0,
+    term: inv.factoryTerm||'full',
+    _editing: true
+  };
+  openFactoryInvoiceAdjust();
+}
 function openFactoryInvoiceAdjust(){
   const p = pendingFactoryUpload; if(!p) return;
   const s = sym(p.q?.cur || p.c?.currency || 'EUR');
@@ -3051,7 +3094,12 @@ function recalcFactoryAdjust(){
       + (t.ship?'<div style="display:flex;justify-content:space-between"><span>Shipping</span><span>'+s+t.ship.toFixed(2)+'</span></div>':'')
       + (t.extras?'<div style="display:flex;justify-content:space-between"><span>Extra lines</span><span>'+s+t.extras.toFixed(2)+'</span></div>':'')
       + '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid var(--border2);margin-top:6px;padding-top:6px;font-size:14px"><span>Factory invoice total</span><span>'+s+t.total.toFixed(2)+'</span></div>'
-      + ((p.term==='deposit'||p.term==='balance')?'<div style="display:flex;justify-content:space-between;color:var(--accent);font-weight:600;margin-top:4px"><span>'+(p.term==='deposit'?'50% Deposit due now':'50% Balance due')+'</span><span>'+s+(t.total/2).toFixed(2)+'</span></div>':'');
+      + (()=>{
+          const goods = t.sub + t.ivaAmt + t.extras;
+          if(p.term==='deposit') return '<div style="display:flex;justify-content:space-between;color:var(--accent);font-weight:600;margin-top:4px"><span>50% Deposit due now</span><span>'+s+(goods/2).toFixed(2)+'</span></div>'+(t.ship?'<div style="display:flex;justify-content:space-between;color:var(--text3);font-size:11px"><span>(shipping '+s+t.ship.toFixed(2)+' will go on the balance)</span><span></span></div>':'');
+          if(p.term==='balance') return '<div style="display:flex;justify-content:space-between;color:var(--accent);font-weight:600;margin-top:4px"><span>50% Balance + full shipping</span><span>'+s+(goods/2+t.ship).toFixed(2)+'</span></div>';
+          return '';
+        })();
   }
 }
 function addFactoryLine(){ pendingFactoryUpload.lines.push({desc:'',sizes:'',units:0,price:0}); openFactoryInvoiceAdjust(); }
@@ -3071,6 +3119,7 @@ function updateFactoryExtra(i,field,val){ if(pendingFactoryUpload.extraLines[i])
 
 function cancelFactoryUpload(){
   pendingFactoryUpload = null;
+  editingFactoryInvoice = null;
   closeModal('quote-modal');
 }
 async function confirmFactoryInvoiceUpload(){
@@ -3080,7 +3129,12 @@ async function confirmFactoryInvoiceUpload(){
   const factory = getFactory(c?.factoryId);
   const term = p.term || 'full';
   const termLabel = term==='deposit' ? ' (50% Deposit)' : term==='balance' ? ' (50% Balance)' : '';
-  const amountForTerm = (term==='deposit'||term==='balance') ? parts.total/2 : parts.total;
+  // Goods portion (subtotal + IVA + extras) is split 50/50; shipping is added IN FULL only to balance/full — never halved, never on deposit
+  const goodsPortion = parts.sub + parts.ivaAmt + parts.extras;
+  let amountForTerm;
+  if(term==='deposit'){ amountForTerm = goodsPortion/2; }
+  else if(term==='balance'){ amountForTerm = goodsPortion/2 + parts.ship; }
+  else { amountForTerm = goodsPortion + parts.ship; }
   const inv = {
     id: Date.now(),
     number: 'FACT-'+(q?q.number:'')+'-'+Date.now().toString().slice(-4),
@@ -3101,16 +3155,36 @@ async function confirmFactoryInvoiceUpload(){
     coBrand: factory ? factory.name : '',
     factoryBankDetails: factory ? (factory.bankDetails||'') : '',
     factoryId: c?.factoryId || '',
-    amountDue: 0, amountPaid: 0, payments: [],  // paid-to-factory tracked via factinvstatus
+    amountDue: amountForTerm, amountPaid: 0, payments: [],  // tracks client→factory payment (excluded from OUR revenue)
     fileName: p.fileName, fileData: p.fileData,
     fromQuote: q ? q.number : ''
   };
   const invs = getClientInvoices(clientId);
-  invs.unshift(inv);
-  saveClientInvoices(clientId, invs);
-  pendingFactoryUpload = null;
-  closeModal('quote-modal');
-  showToast('Factory invoice stored + client invoice generated ✓');
+  if(editingFactoryInvoice && editingFactoryInvoice.clientId===clientId){
+    // Update existing — preserve number, id, payments, file, and status
+    const ei = invs.findIndex(x => x.id===editingFactoryInvoice.invId);
+    if(ei>=0){
+      const old = invs[ei];
+      inv.id = old.id;
+      inv.number = old.number;
+      inv.date = old.date;
+      inv.amountPaid = old.amountPaid||0;
+      inv.payments = old.payments||[];
+      inv.fileName = old.fileName; inv.fileData = old.fileData;
+      invs[ei] = inv;
+    }
+    editingFactoryInvoice = null;
+    saveClientInvoices(clientId, invs);
+    pendingFactoryUpload = null;
+    closeModal('quote-modal');
+    showToast('Factory invoice updated ✓');
+  } else {
+    invs.unshift(inv);
+    saveClientInvoices(clientId, invs);
+    pendingFactoryUpload = null;
+    closeModal('quote-modal');
+    showToast('Factory invoice stored + client invoice generated ✓');
+  }
   await renderClientDetail(clientId);
   const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
   if (tab) switchTab(tab, 'ct-invoices');
@@ -3118,7 +3192,7 @@ async function confirmFactoryInvoiceUpload(){
 
 // PAYMENTS & INVOICE RECORDS
 let activePaymentClientId=null,activePaymentInvIdx=null,activePaymentProof=null;
-function viewInvoiceRecord(clientId,idx){const invs=getClientInvoices(clientId);const inv=invs[idx];if(!inv)return;const c=clients.find(x=>String(x.id)===String(clientId));const _billFactory=inv.isCommission?getFactory(inv.factoryId||c?.factoryId):null;const billName=_billFactory?_billFactory.name:(c?.brand||'—');const billAddress=_billFactory?(_billFactory.address||''):(c?.address||'');const billCountry=_billFactory?(_billFactory.country||''):(c?.country||'');const billVat=_billFactory?(_billFactory.vat||''):(c?.vat||'');const s=sym(inv.cur||c?.currency||'EUR');const totalPaid=inv.amountPaid||0;const amountDue=inv.amountDue!=null?inv.amountDue:inv.totalClient;document.getElementById('quote-modal-title').textContent='Invoice '+inv.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">'+inv.number+'</div><div class="inv-meta">'+fmtDate(inv.date)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+billName+'</div>'+(billAddress?'<div style="font-size:12px;color:#666;margin-top:2px">'+billAddress+(billCountry?', '+billCountry:'')+'</div>':'')+(billVat?'<div style="font-size:12px;color:#666">'+(_billFactory?'':'VAT: ')+billVat+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(inv.isCommission?'<tr><td>'+(getCompanyInfo().commissionLabel||'Agent Fee')+' — '+(c?.brand||'')+(inv.fromQuote?', order '+inv.fromQuote:'')+(inv.typeLabel||'')+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td></tr>':((inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(inv.ivaAmt?'<tr><td>IVA</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'')))+(!inv.isCommission && inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')+(inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:280px;margin-left:auto">'+(inv.typeLabel?'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:right">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</div>':'')+'<div class="inv-total-line"><span>'+(inv.isCommission?(getCompanyInfo().commissionLabel||'Agent Fee')+' total':'Order total')+'</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div>'+(inv.invType==='deposit'?'<div class="inv-total-line grand"><span>Amount due now (50%)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Balance due before dispatch</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':inv.invType==='balance'?'<div class="inv-total-line grand"><span>Amount due now (50% Balance)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Deposit previously paid</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':'<div class="inv-total-line grand"><span>Total due</span><span>'+s+amountDue.toFixed(2)+'</span></div>')+'<div class="inv-total-line" style="color:'+(totalPaid>=amountDue?'#4a7':'#c84')+'"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div><div class="inv-total-line"><span>Outstanding</span><span>'+s+Math.max(0,amountDue-totalPaid).toFixed(2)+'</span></div></div></div>'+(inv.payments?.length?'<div style="margin-top:12px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Payment history</div>'+inv.payments.map(p=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span>'+fmtDate(p.date)+' · '+(p.method||'Transfer')+'</span><span style="color:var(--green)">'+s+p.amount.toFixed(2)+'</span></div>').join('')+'</div>':'');document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadInvoicePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadInvoiceHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-green" onclick="closeModal(\'quote-modal\');openPaymentModal(\''+clientId+'\','+idx+')">+ Add payment</button>';document.getElementById('quote-modal').classList.add('open');}
+function viewInvoiceRecord(clientId,idx){const invs=getClientInvoices(clientId);const inv=invs[idx];if(!inv)return;if(inv.isFactoryToClient){viewCoBrandedClientInvoice(clientId,idx);return;}const c=clients.find(x=>String(x.id)===String(clientId));const _billFactory=inv.isCommission?getFactory(inv.factoryId||c?.factoryId):null;const billName=_billFactory?_billFactory.name:(c?.brand||'—');const billAddress=_billFactory?(_billFactory.address||''):(c?.address||'');const billCountry=_billFactory?(_billFactory.country||''):(c?.country||'');const billVat=_billFactory?(_billFactory.vat||''):(c?.vat||'');const s=sym(inv.cur||c?.currency||'EUR');const totalPaid=inv.amountPaid||0;const amountDue=inv.amountDue!=null?inv.amountDue:inv.totalClient;document.getElementById('quote-modal-title').textContent='Invoice '+inv.number;document.getElementById('quote-modal-body').innerHTML='<div class="doc-white"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div>'+getLogoHtml(false)+getCompanyAddressHtml()+'</div><div style="text-align:right"><div class="inv-number" style="font-size:20px">'+inv.number+'</div><div class="inv-meta">'+fmtDate(inv.date)+'</div></div></div><hr class="inv-hr"><div style="margin-bottom:16px"><div class="inv-bill-label">Bill to</div><div class="inv-bill-name">'+billName+'</div>'+(billAddress?'<div style="font-size:12px;color:#666;margin-top:2px">'+billAddress+(billCountry?', '+billCountry:'')+'</div>':'')+(billVat?'<div style="font-size:12px;color:#666">'+(_billFactory?'':'VAT: ')+billVat+'</div>':'')+'</div><table class="inv-tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr></thead><tbody>'+(inv.isCommission?'<tr><td>'+(getCompanyInfo().commissionLabel||'Agent Fee')+' — '+(c?.brand||'')+(inv.fromQuote?', order '+inv.fromQuote:'')+(inv.typeLabel||'')+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td></tr>':((inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')+(inv.ivaAmt?'<tr><td>IVA</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'')))+(!inv.isCommission && inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')+(inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('')+'</tbody></table><hr class="inv-hr"><div style="max-width:280px;margin-left:auto">'+(inv.typeLabel?'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:right">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</div>':'')+'<div class="inv-total-line"><span>'+(inv.isCommission?(getCompanyInfo().commissionLabel||'Agent Fee')+' total':'Order total')+'</span><span>'+s+inv.totalClient.toFixed(2)+'</span></div>'+(inv.invType==='deposit'?'<div class="inv-total-line grand"><span>Amount due now (50%)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Balance due before dispatch</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':inv.invType==='balance'?'<div class="inv-total-line grand"><span>Amount due now (50% Balance)</span><span>'+s+amountDue.toFixed(2)+'</span></div><div class="inv-total-line" style="color:#999"><span>Deposit previously paid</span><span>'+s+(inv.totalClient-amountDue).toFixed(2)+'</span></div>':'<div class="inv-total-line grand"><span>Total due</span><span>'+s+amountDue.toFixed(2)+'</span></div>')+'<div class="inv-total-line" style="color:'+(totalPaid>=amountDue?'#4a7':'#c84')+'"><span>Paid</span><span>'+s+totalPaid.toFixed(2)+'</span></div><div class="inv-total-line"><span>Outstanding</span><span>'+s+Math.max(0,amountDue-totalPaid).toFixed(2)+'</span></div></div></div>'+(inv.payments?.length?'<div style="margin-top:12px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Payment history</div>'+inv.payments.map(p=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span>'+fmtDate(p.date)+' · '+(p.method||'Transfer')+'</span><span style="color:var(--green)">'+s+p.amount.toFixed(2)+'</span></div>').join('')+'</div>':'');document.getElementById('quote-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'quote-modal\')">Close</button><button class="btn btn-sm" onclick="downloadInvoicePDF(\''+clientId+'\','+idx+')">⬇ Download PDF</button><button class="btn btn-sm" onclick="downloadInvoiceHTML(\''+clientId+'\','+idx+')">⬇ HTML</button><button class="btn btn-green" onclick="closeModal(\'quote-modal\');openPaymentModal(\''+clientId+'\','+idx+')">+ Add payment</button>';document.getElementById('quote-modal').classList.add('open');}
 function openPaymentModal(clientId,invIdx){activePaymentClientId=clientId;activePaymentInvIdx=invIdx;activePaymentProof=null;const invs=getClientInvoices(clientId);const inv=invs[invIdx];const c=clients.find(x=>String(x.id)===String(clientId));const s=sym(inv.cur||c?.currency||'EUR');const dueAmt=inv.amountDue!=null?inv.amountDue:(inv.totalClient||0);const remaining=Math.max(0,dueAmt-(inv.amountPaid||0));document.getElementById('payment-modal-body').innerHTML='<div style="margin-bottom:14px;font-size:13px;color:var(--text3)">Invoice '+inv.number+' · Outstanding: <strong style="color:var(--amber)">'+s+remaining.toFixed(2)+'</strong></div><div class="grid2"><div class="field"><label>Amount paid</label><input id="pay-amount" type="number" step="0.01" value="'+remaining.toFixed(2)+'"></div><div class="field"><label>Date</label><input id="pay-date" type="date" value="'+today()+'"></div></div><div class="field"><label>Payment method</label><select id="pay-method"><option>Bank transfer</option><option>PayPal</option><option>Wise</option><option>Cash</option><option>Other</option></select></div><div class="field"><label>Notes</label><input id="pay-notes" placeholder="Optional reference"></div><div class="upload-zone" onclick="document.getElementById(\'payment-proof-input\').click()" style="margin-top:8px"><div style="font-size:18px;margin-bottom:4px">📎</div><div style="font-size:12px;color:var(--text3)" id="proof-label">Upload proof of payment (optional)</div></div>';document.getElementById('payment-modal-actions').innerHTML='<button class="btn" onclick="closeModal(\'payment-modal\')">Cancel</button><button class="btn btn-primary" onclick="savePayment()">Save payment</button>';document.getElementById('payment-modal').classList.add('open');}
 function handlePaymentProof(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{activePaymentProof={name:file.name,data:ev.target.result,size:file.size};document.getElementById('proof-label').textContent='✓ '+file.name;};reader.readAsDataURL(file);e.target.value='';}
 async function savePayment(){const amount=parseNum(document.getElementById('pay-amount').value, 0);const date=document.getElementById('pay-date').value;const method=document.getElementById('pay-method').value;const notes=document.getElementById('pay-notes').value;const invs=getClientInvoices(activePaymentClientId);const inv=invs[activePaymentInvIdx];if(!inv)return;if(!inv.payments)inv.payments=[];const payment={id:Date.now(),amount,date,method,notes};if(activePaymentProof){payment.proof=activePaymentProof.name;await saveFileData(activePaymentClientId,'paymentproofs',activePaymentProof.name,activePaymentProof.data);}inv.payments.push(payment);inv.amountPaid=(inv.amountPaid||0)+amount;saveClientInvoices(activePaymentClientId,invs);closeModal('payment-modal');showToast('Payment recorded ✓');const cid=activePaymentClientId;await renderClientDetail(cid);renderDashboard();const tab=document.querySelector('#client-content [onclick*="ct-invoices"]');if(tab)switchTab(tab,'ct-invoices');}
@@ -3672,13 +3746,13 @@ function renderInvoiceDoc(clientId, idx) {
   return buildDocHtml('Invoice ' + inv.number, inner);
 }
 
-function downloadInvoicePDF(clientId, idx) {
+function downloadInvoicePDF(clientId, idx) {const _fi=getClientInvoices(clientId)[idx];if(_fi&&_fi.isFactoryToClient){printCoBrandedClientInvoice(clientId,idx);return;}
   const html = renderInvoiceDoc(clientId, idx);
   if (!html) return;
   const inv = getClientInvoices(clientId)[idx];
   htmlToPdf(html, 'Invoice_'+(inv?inv.number:'TAC')+'.pdf');
 }
-function downloadInvoiceHTML(clientId, idx) {
+function downloadInvoiceHTML(clientId, idx) {const _fi=getClientInvoices(clientId)[idx];if(_fi&&_fi.isFactoryToClient){printCoBrandedClientInvoice(clientId,idx);return;}
   const html = renderInvoiceDoc(clientId, idx);
   if (!html) return;
   const inv = getClientInvoices(clientId)[idx];
