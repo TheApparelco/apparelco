@@ -911,6 +911,15 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<div class="overlay" id="prompt-modal"><div class="modal" style="width:420px">
+  <div class="modal-title" id="prompt-title">Enter value</div>
+  <div id="prompt-msg" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+  <input id="prompt-input" type="text" style="width:100%;margin-bottom:16px" onkeydown="if(event.key==='Enter')resolvePrompt(true)">
+  <div style="display:flex;gap:8px">
+    <button class="btn" style="flex:1" onclick="resolvePrompt(false)">Cancel</button>
+    <button class="btn btn-primary" style="flex:1" onclick="resolvePrompt(true)">OK</button>
+  </div>
+</div></div>
 <div class="overlay" id="choice-modal"><div class="modal" style="width:440px">
   <div class="modal-title" id="choice-title">Choose</div>
   <div id="choice-msg" style="font-size:13px;color:var(--text2);margin-bottom:16px;white-space:pre-line"></div>
@@ -2107,8 +2116,8 @@ el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-
 +'<div id="ct-quotes" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Quotes</span><button class="btn btn-sm" onclick="openNewQuote(\''+id+'\')">+ New quote</button></div><div>'
 +(quotes.length?quotes.map((q,i)=>'<div class="quote-row" onclick="viewQuote(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(q.number||'Q-'+i)+(q.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(q.date)+' · '+(q.styles?.length||0)+' style'+(q.styles?.length!==1?'s':'')+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:500">'+fmtMoney(q.totalClient,c.currency||'EUR')+'</span><span class="paid-badge '+(q.status==='accepted'?'paid':q.status==='rejected'?'partial':'unpaid')+'">'+(q.status||'pending')+'</span><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuotePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadQuoteHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs" onclick="event.stopPropagation();editQuote(\''+id+'\','+i+')" title="Edit quote">✎ Edit</button><button class="btn btn-xs btn-primary" onclick="event.stopPropagation();convertQuoteToInvoice(\''+id+'\','+i+')">→ Invoice</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteQuote(\''+id+'\','+i+')">✕</button></div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No quotes yet</div>')
 +'</div></div></div>'
-+'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button></div></div><div>'
-+(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded file">⬇ File</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button><button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
++'<div id="ct-invoices" style="display:none"><div class="card"><div class="card-header"><span class="card-title">Invoices & payments</span><div style="display:flex;gap:6px">'+(isFactoryDirect(id)?'<button class="btn btn-sm btn-primary" onclick="openClientCommissionCreate(\''+id+'\')">+ Commission invoice</button>':'')+'<button class="btn btn-sm" onclick="createBlankInvoiceForClient(\''+id+'\')">+ New invoice</button><button class="btn btn-sm" onclick="createShippingInvoice(\''+id+'\')" title="Create a standalone shipping invoice">🚚 Shipping invoice</button></div></div><div>'
++(invoices.length?invoices.map((inv,i)=>'<div class="quote-row" onclick="viewInvoiceRecord(\''+id+'\','+i+')"><div><div style="font-weight:500">'+(inv.number||'TAC-'+i)+(inv.isSample?' <span style="font-size:10px;background:#c4a572;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">SAMPLE</span>':'')+(inv.isCommission?' <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">COMMISSION</span>':'')+(inv.isFactoryToClient?' <span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:0.05em;font-weight:600">FACTORY&#8594;CLIENT</span>':'')+(inv.typeLabel?'<span style="font-size:10px;color:var(--accent2);margin-left:6px;letter-spacing:0.05em;text-transform:uppercase">'+inv.typeLabel.replace(/[()]/g,'').trim()+'</span>':'')+'</div><div style="font-size:11px;color:var(--text3)">'+fmtDate(inv.date)+'</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(inv.isFactoryToClient?renderFactInvStatusInline(id, inv.id):'<span style="font-weight:500">'+fmtMoney((inv.amountDue!=null?inv.amountDue:inv.totalClient),c.currency||'EUR')+'</span><span class="paid-badge '+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'paid':(inv.amountPaid||0)>0?'partial':'unpaid')+'">'+((inv.amountPaid||0)>=(inv.amountDue!=null?inv.amountDue:inv.totalClient||0)?'Paid':(inv.amountPaid||0)>0?'Partial':'Unpaid')+'</span>')+''+(inv.isFactoryToClient?(inv.fileData?'<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryInvoiceFile(\''+id+'\','+i+')" title="View uploaded file">⬇ File</button>':'')+'<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>':'<button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoicePDF(\''+id+'\','+i+')" title="Download PDF">⬇ PDF</button><button class="btn btn-xs" onclick="event.stopPropagation();downloadInvoiceHTML(\''+id+'\','+i+')" title="Download HTML">⬇ HTML</button>'+(!inv.isCommission?'<button class="btn btn-xs" onclick="event.stopPropagation();editInvoice(\''+id+'\','+i+')" title="Edit invoice">✎ Edit</button>':'')+'<button class="btn btn-xs btn-green" onclick="event.stopPropagation();openPaymentModal(\''+id+'\','+i+')">+ Payment</button><button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteInvoiceRecord(\''+id+'\','+i+')">✕</button>')+'</div></div>').join(''):'<div style="padding:20px;text-align:center;font-size:13px;color:var(--text3)">No invoices yet. Generate from Pricing or convert a quote.</div>')
 +'</div></div></div>'
 +'<div id="ct-workflow" style="display:none">'+renderWorkflow(id,checks,quotes)+'</div>'
 +'<div id="ct-photos" style="display:none"><div class="card"><div class="card-body"><div class="photo-grid">'
@@ -2603,14 +2612,32 @@ function viewQuote(clientId,idx){const c=clients.find(x=>String(x.id)===String(c
 function updateQuoteStatus(clientId,idx,status){const quotes=getClientQuotes(clientId);if(quotes[idx]){quotes[idx].status=status;saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}}
 async function deleteQuote(clientId,idx){const _ok=await themedConfirm('Delete quote?','Delete this quote permanently?','Delete','🗑️');if(!_ok)return;const quotes=getClientQuotes(clientId);quotes.splice(idx,1);saveClientQuotes(clientId,quotes);renderClientDetail(clientId);}
 async function convertQuoteToInvoice(clientId,idx){
-  // Warn if this quote already has an invoice (warn but allow)
+  // Warn if this quote already has an invoice — offer Keep both / Replace / Cancel
   const _q = getClientQuotes(clientId)[idx];
   if(_q){
     const _invs = getClientInvoices(clientId);
-    const _already = _invs.some(inv => inv.fromQuote===_q.number || (inv.fromQuotes && inv.fromQuotes.split(',').map(s=>s.trim()).includes(_q.number)));
-    if(_already){
-      const _ok = await themedConfirm('Invoice already exists', 'An invoice has already been created from quote '+_q.number+'. Do you want to create another one?', 'Create anyway', '⚠️');
-      if(!_ok) return;
+    const _linked = _invs.map((inv,ix)=>({inv,ix})).filter(o => o.inv.fromQuote===_q.number || (o.inv.fromQuotes && o.inv.fromQuotes.split(',').map(s=>s.trim()).includes(_q.number)));
+    if(_linked.length){
+      const _hasPay = _linked.some(o => (o.inv.amountPaid||0) > 0 || (o.inv.payments && o.inv.payments.length));
+      let _msg = 'Quote '+_q.number+' already has '+_linked.length+' invoice'+(_linked.length>1?'s':'')+' created from it.';
+      if(_hasPay) _msg += '\n\n⚠️ Existing invoice(s) have PAYMENTS recorded. Replacing loses that history unless you migrate it.';
+      const _choice = await themedChoice('Invoice already exists', _msg, [
+        {label:'Keep both (create another)', value:'keepboth'},
+        {label: _hasPay ? 'Replace (migrate payments)' : 'Replace existing', value:'replace'},
+        {label:'Cancel', value:'cancel'}
+      ]);
+      if(_choice === 'cancel') return;
+      if(_choice === 'replace'){
+        // Gather payments to migrate, remove old linked invoices
+        const _migrated = [];
+        _linked.forEach(o => { if(o.inv.payments && o.inv.payments.length) _migrated.push(...o.inv.payments); });
+        const _oldPaid = _linked.reduce((a,o)=>a+(o.inv.amountPaid||0),0);
+        _linked.sort((a,b)=>b.ix-a.ix).forEach(o => _invs.splice(o.ix,1));
+        saveClientInvoices(clientId, _invs);
+        // Stash migration data for the invoice creator to pick up
+        window._pendingMigration = { migrated:_migrated, oldPaid:_oldPaid };
+      }
+      // keepboth → just proceed normally
     }
   }
   const billing = getClientBillingType(clientId);
@@ -2847,13 +2874,13 @@ function saveFactInvStatusToDrive(clientId, map){
 function renderFactInvStatusInline(clientId, invId){
   const st = factoryInvStatus(clientId, invId);
   const chip = (label, on, field) => '<button onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\''+field+'\')" style="font-size:10px;padding:2px 8px;border-radius:3px;margin-left:4px;letter-spacing:0.03em;font-weight:600;cursor:pointer;border:0.5px solid '+(on?'var(--green)':'var(--border2)')+';background:'+(on?'var(--green)':'transparent')+';color:'+(on?'#fff':'var(--text3)')+'">'+(on?'✓ ':'')+label+'</button>';
-  // Paid-to-factory badge + toggle
+  // Paid-to-factory badge — matches the normal invoice paid-badge style
   const paidBadge = st.paidToFactory
-    ? '<span style="font-size:10px;background:var(--green);color:#fff;padding:2px 8px;border-radius:3px;margin-left:6px;letter-spacing:0.03em;font-weight:600;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid '+st.paidDate:'')+'">✓ Paid to factory</span>'
-    : '<span style="font-size:10px;background:transparent;color:var(--amber);border:0.5px solid var(--amber);padding:2px 8px;border-radius:3px;margin-left:6px;letter-spacing:0.03em;font-weight:600;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid to factory</span>';
+    ? '<span class="paid-badge paid" style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')" title="'+(st.paidDate?'Paid to factory '+st.paidDate:'')+'">Paid to factory</span>'
+    : '<span class="paid-badge unpaid" style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setFactoryInvStatus(\''+clientId+'\','+invId+',\'paidToFactory\')">Unpaid</span>';
   const proofBtn = st.proofFile
-    ? '<button onclick="event.stopPropagation();downloadFactoryProof(\''+clientId+'\','+invId+')" style="font-size:10px;padding:2px 6px;margin-left:4px;border-radius:3px;border:0.5px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer" title="View proof">📎 Proof</button>'
-    : '<button onclick="event.stopPropagation();uploadFactoryInvProof(\''+clientId+'\','+invId+')" style="font-size:10px;padding:2px 6px;margin-left:4px;border-radius:3px;border:0.5px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer" title="Upload proof of payment">+ Proof</button>';
+    ? '<button class="btn btn-xs" onclick="event.stopPropagation();downloadFactoryProof(\''+clientId+'\','+invId+')" title="View proof of payment">📎 Proof</button>'
+    : '<button class="btn btn-xs btn-green" onclick="event.stopPropagation();uploadFactoryInvProof(\''+clientId+'\','+invId+')" title="Upload proof of payment">+ Proof</button>';
   return '<span id="factinv-status-'+invId+'" style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px">'
     + '<span style="font-size:10px;background:var(--surface3);color:var(--text2);padding:2px 6px;border-radius:3px;letter-spacing:0.05em;font-weight:600">ON FILE</span>'
     + chip('Received', st.received, 'received')
@@ -2933,11 +2960,38 @@ async function saveInvoiceToClient(){
     sampleCommAmt = 0;
     grand = d.grand || 0;
   }
+  // Shipping prompt on balance / full production invoices (not deposits, not samples)
+  let shipVal = d.ship || 0;
+  let shipTBD = false;
+  if(!isSample && (invType==='balance' || invType==='full') && !shipVal){
+    const shipChoice = await themedChoice('Add shipping?', 'Do you want to add a shipping cost to this invoice? You can enter it now, or mark it "to be determined" and add it later by editing the invoice.', [
+      {label:'Enter shipping now', value:'enter'},
+      {label:'Shipping to be determined', value:'tbd'},
+      {label:'No shipping', value:'none'}
+    ]);
+    if(shipChoice==='enter'){
+      const amt = await themedPrompt('Shipping cost', 'Enter the shipping amount ('+document.getElementById('i-cur').value+'):', '0.00');
+      if(amt===null) return; // cancelled
+      shipVal = parseNum(amt, 0);
+    } else if(shipChoice==='tbd'){
+      shipTBD = true; shipVal = 0;
+    }
+  }
+  // Recompute grand with (possibly new) shipping — only for production invoices
+  if(!isSample){
+    const baseNoShip = (d.grand||0) - (d.ship||0);
+    grand = baseNoShip + shipVal;
+  }
   const amountDue = (invType==='deposit'||invType==='balance') ? grand/2 : grand;
   const typeLabel = invType==='deposit'?' (50% Deposit)':invType==='balance'?' (50% Balance)':'';
-  const ok = await themedConfirm(isSample ? 'Save sample invoice?' : 'Save invoice?', 'Save this invoice to the client record?', 'Save invoice', isSample ? '🧵' : '🧾');
+  const ok = await themedConfirm(isSample ? 'Save sample invoice?' : 'Save invoice?', shipTBD ? 'Shipping is marked "to be determined" — the total excludes shipping until you add it. Save invoice?' : 'Save this invoice to the client record?', 'Save invoice', isSample ? '🧵' : '🧾');
   if(!ok) return;
   const invNum = getNextInvoiceNumber(isSample);
+  // Pick up any pending payment migration from a Replace action
+  const mig = window._pendingMigration || null;
+  window._pendingMigration = null;
+  const migPaid = mig ? mig.oldPaid : 0;
+  const migPayments = mig ? mig.migrated : [];
   const inv={
     id:Date.now(),
     number:invNum,
@@ -2945,7 +2999,7 @@ async function saveInvoiceToClient(){
     cur:document.getElementById('i-cur').value,
     styles:d.garments||[],
     samples:d.samples||[],
-    iva:d.iva||0,ship:d.ship||0,
+    iva:d.iva||0,ship:shipVal,shipTBD:shipTBD,
     stylesSub:d.garmentSub||0,ivaAmt:d.ivaAmt||0,sampTotal:d.sampTotal||0,
     totalClient:grand,
     amountDue:amountDue,
@@ -2956,13 +3010,17 @@ async function saveInvoiceToClient(){
     sampleCommPct:sampleCommPct,
     sampleCommAmt:sampleCommAmt,
     totalFactory:factoryTotal,
-    profit: isSample ? (grand - factoryTotal - (d.ship||0)) : (grand - factoryTotal),
-    amountPaid:0,payments:[]
+    profit: isSample ? (grand - factoryTotal - shipVal) : (grand - factoryTotal),
+    amountPaid:migPaid,payments:migPayments
   };
   const invs=getClientInvoices(cid);
   invs.unshift(inv);
   saveClientInvoices(cid,invs);
-  showToast(isSample ? 'Sample invoice saved ✓' : 'Invoice saved to client record ✓');
+  if(mig && migPaid > grand){
+    showToast('⚠️ Migrated payments ('+sym(inv.cur)+migPaid.toFixed(2)+') exceed new total — please review');
+  } else {
+    showToast(isSample ? 'Sample invoice saved ✓' : (mig && migPayments.length ? 'Invoice saved (payments migrated) ✓' : 'Invoice saved to client record ✓'));
+  }
 }
 
 // PRICING
@@ -3409,7 +3467,7 @@ function renderInvoiceDoc(clientId, idx) {
       ? '<tr><td>'+(co.commissionLabel||'Agent Fee')+' — '+(c?.brand||'')+(inv.fromQuote?', order '+inv.fromQuote:'')+(inv.typeLabel||'')+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td><td style="text-align:right">'+s+(inv.amountDue!=null?inv.amountDue:(inv.totalClient||0)).toFixed(2)+'</td></tr>'
       : (inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+g.units+'</td><td style="text-align:right">'+s+g.ppu.toFixed(2)+'</td><td style="text-align:right">'+s+g.subtotal.toFixed(2)+'</td></tr>').join('')) +
     (!inv.isCommission && inv.ivaAmt?'<tr><td>IVA ('+inv.iva+'%)</td><td></td><td></td><td style="text-align:right">'+s+inv.ivaAmt.toFixed(2)+'</td></tr>':'') +
-    (inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'') +
+    (inv.shipTBD?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right;font-style:italic;color:#999">to be determined</td></tr>':(inv.ship?'<tr><td>Shipping</td><td></td><td></td><td style="text-align:right">'+s+inv.ship.toFixed(2)+'</td></tr>':'')) +
     (inv.isSample && inv.protoFee ? '<tr><td><strong>Prototype Development Fee</strong><div style="font-size:10px;color:#888;font-style:italic">Refundable on bulk production within 60 days of approval</div></td><td></td><td></td><td style="text-align:right">'+s+inv.protoFee.toFixed(2)+'</td></tr>' : '') +
     (inv.samples||[]).map(x=>'<tr><td>'+x.desc+'</td><td style="text-align:right">1</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td><td style="text-align:right">'+s+x.total.toFixed(2)+'</td></tr>').join('') +
     '</tbody></table>' +
@@ -3475,6 +3533,137 @@ function createBlankInvoiceForClient(clientId) {
   const c = clients.find(x => String(x.id) === String(clientId));
   if (!c) { showToast('Client not found'); return; }
   openInvoiceCreator(clientId);
+}
+
+// Create a standalone shipping-only invoice
+async function createShippingInvoice(clientId){
+  const c = clients.find(x=>String(x.id)===String(clientId));
+  if(!c){ showToast('Client not found'); return; }
+  const cur = c.currency || 'EUR';
+  const amt = await themedPrompt('Shipping invoice', 'Enter the shipping amount to invoice ('+cur+'):', '0.00');
+  if(amt===null) return;
+  const ship = parseNum(amt, 0);
+  if(ship<=0){ showToast('Enter a shipping amount greater than 0'); return; }
+  const ok = await themedConfirm('Create shipping invoice?', 'Create a standalone shipping invoice for '+sym(cur)+ship.toFixed(2)+'?', 'Create invoice', '🚚');
+  if(!ok) return;
+  const inv = {
+    id: Date.now(),
+    number: getNextInvoiceNumber(false),
+    date: today(),
+    cur: cur,
+    styles: [{desc:'Shipping', sizes:'', units:1, fp:ship, co:0, ppu:ship, subtotal:ship}],
+    samples: [],
+    iva: 0, ivaAmt: 0, ship: 0, shipTBD:false,
+    stylesSub: ship,
+    totalClient: ship,
+    amountDue: ship,
+    invType: 'full',
+    typeLabel: ' (Shipping)',
+    isShipping: true,
+    totalFactory: 0,
+    profit: ship,
+    amountPaid: 0, payments: []
+  };
+  const invs = getClientInvoices(clientId);
+  invs.unshift(inv);
+  saveClientInvoices(clientId, invs);
+  showToast('Shipping invoice '+inv.number+' created ✓');
+  await renderClientDetail(clientId);
+  const tab = document.querySelector('#client-content [onclick*="ct-invoices"]');
+  if(tab) switchTab(tab,'ct-invoices');
+}
+
+// ============ EDITABLE INVOICES ============
+let editingInvoiceCtx = { clientId:null, idx:null };
+function editInvoice(clientId, idx){
+  const inv = getClientInvoices(clientId)[idx];
+  if(!inv){ showToast('Invoice not found'); return; }
+  if(inv.isFactoryToClient){ themedAlert('Cannot edit','This is an uploaded factory document. To change amounts, edit the quote and re-upload.','ℹ️'); return; }
+  if(inv.isCommission){ themedAlert('Cannot edit here','Commission invoices are generated from the quote. Edit the quote and recreate if needed.','ℹ️'); return; }
+  editingInvoiceCtx = { clientId, idx };
+  const s = sym(inv.cur || 'EUR');
+  let rows = (inv.styles||[]).map((g,gi)=>
+    '<div class="style-block" id="ei-style-'+gi+'" style="margin-bottom:8px">'
+    + '<div class="style-block-title">Line '+(gi+1)+'</div>'
+    + '<div class="grid2" style="margin-bottom:8px"><div class="field" style="margin:0"><label>Description</label><input value="'+(g.desc||'').replace(/"/g,'&quot;')+'" oninput="recalcEditInvoice()" data-f="desc"></div><div class="field" style="margin:0"><label>Size range</label><input value="'+(g.sizes||'').replace(/"/g,'&quot;')+'" oninput="recalcEditInvoice()" data-f="sizes"></div></div>'
+    + '<div class="grid3"><div class="field" style="margin:0"><label>Units</label><input type="number" value="'+(g.units||0)+'" oninput="recalcEditInvoice()" data-f="units"></div><div class="field" style="margin:0"><label>Factory price/unit</label><input type="number" step="0.01" value="'+(g.fp!=null?g.fp:0)+'" oninput="recalcEditInvoice()" data-f="fp"></div><div class="field" style="margin:0"><label>Commission (%)</label><input type="number" value="'+(g.co!=null?g.co:0)+'" oninput="recalcEditInvoice()" data-f="co"></div></div>'
+    + '</div>'
+  ).join('');
+  const body = '<div style="max-height:60vh;overflow-y:auto">'
+    + '<div id="ei-styles">'+rows+'</div>'
+    + '<div class="grid3" style="margin-top:12px"><div class="field"><label>IVA (%)</label><input id="ei-iva" type="number" value="'+(inv.iva||0)+'" oninput="recalcEditInvoice()"></div>'
+    + '<div class="field"><label>Shipping ('+s+')</label><input id="ei-ship" type="number" step="0.01" value="'+(inv.shipTBD?'':(inv.ship||0))+'" placeholder="'+(inv.shipTBD?'to be determined':'0.00')+'" oninput="document.getElementById(\'ei-shiptbd\').checked=false;recalcEditInvoice()"></div>'
+    + '<div class="field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400"><input type="checkbox" id="ei-shiptbd" '+(inv.shipTBD?'checked':'')+' onchange="recalcEditInvoice()" style="width:auto"> Shipping TBD</label></div></div>'
+    + '<div id="ei-preview" style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>'
+    + (((inv.amountPaid||0)>0)?'<div style="margin-top:10px;font-size:12px;color:var(--amber)">⚠️ This invoice has '+s+(inv.amountPaid||0).toFixed(2)+' recorded in payments. Editing keeps the payments; if the new total is lower than what\'s paid, you\'ll see a warning.</div>':'')
+    + '</div>';
+  document.getElementById('quote-modal-title').textContent = 'Edit invoice '+(inv.number||'');
+  document.getElementById('quote-modal-body').innerHTML = body
+    + '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn" style="flex:1" onclick="closeModal(\'quote-modal\')">Cancel</button><button class="btn btn-primary" style="flex:1" onclick="saveEditedInvoice()">Save changes</button></div>';
+  document.getElementById('quote-modal').classList.add('open');
+  recalcEditInvoice();
+}
+function readEditInvoiceStyles(){
+  return Array.from(document.querySelectorAll('#ei-styles .style-block')).map(b=>{
+    const get=f=>{const el=b.querySelector('[data-f="'+f+'"]'); return el?el.value:'';};
+    const desc=get('desc')||'Item', sizes=get('sizes')||'', units=parseInt(get('units'))||0, fp=parseFloat(get('fp'))||0, co=parseFloat(get('co'))||0;
+    const ppu=fp*(1+co/100);
+    return {desc,sizes,units,fp,co,ppu,subtotal:ppu*units};
+  });
+}
+function computeEditInvoiceTotals(){
+  const styles=readEditInvoiceStyles();
+  const iva=parseNum(document.getElementById('ei-iva').value,0);
+  const shipTBD=document.getElementById('ei-shiptbd').checked;
+  const ship=shipTBD?0:parseNum(document.getElementById('ei-ship').value,0);
+  const stylesSub=styles.reduce((a,g)=>a+g.subtotal,0);
+  const ivaAmt=stylesSub*(iva/100);
+  const totalFactory=styles.reduce((a,g)=>a+g.fp*g.units,0);
+  const grand=stylesSub+ivaAmt+ship;
+  return {styles,iva,ivaAmt,ship,shipTBD,stylesSub,totalFactory,grand,profit:grand-totalFactory};
+}
+function recalcEditInvoice(){
+  const inv=getClientInvoices(editingInvoiceCtx.clientId)[editingInvoiceCtx.idx];
+  const t=computeEditInvoiceTotals();
+  const s=sym(inv.cur||'EUR');
+  const prev=document.getElementById('ei-preview');
+  if(prev){
+    prev.innerHTML='<div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>'+s+t.stylesSub.toFixed(2)+'</span></div>'
+      + (t.ivaAmt?'<div style="display:flex;justify-content:space-between"><span>IVA ('+t.iva+'%)</span><span>'+s+t.ivaAmt.toFixed(2)+'</span></div>':'')
+      + '<div style="display:flex;justify-content:space-between"><span>Shipping</span><span>'+(t.shipTBD?'<em style="color:#999">to be determined</em>':s+t.ship.toFixed(2))+'</span></div>'
+      + '<div style="display:flex;justify-content:space-between;font-weight:600;border-top:0.5px solid var(--border2);margin-top:6px;padding-top:6px"><span>Total</span><span>'+s+t.grand.toFixed(2)+'</span></div>'
+      + '<div style="display:flex;justify-content:space-between;color:var(--text3);font-size:12px"><span>Est. profit</span><span>'+s+t.profit.toFixed(2)+'</span></div>';
+  }
+}
+async function saveEditedInvoice(){
+  const {clientId,idx}=editingInvoiceCtx;
+  const invs=getClientInvoices(clientId);
+  const inv=invs[idx];
+  if(!inv) return;
+  const t=computeEditInvoiceTotals();
+  const paid=inv.amountPaid||0;
+  let extraWarn='';
+  if(paid>t.grand) extraWarn='\n\n⚠️ The new total ('+sym(inv.cur||'EUR')+t.grand.toFixed(2)+') is LOWER than what has already been paid ('+sym(inv.cur||'EUR')+paid.toFixed(2)+'). The invoice will show as overpaid — please review.';
+  const ok=await themedConfirm('Save invoice changes?','Recalculate and update this invoice with your changes.'+extraWarn,'Save changes','🧾');
+  if(!ok) return;
+  // Preserve number, id, dates, payments, type; update line items + totals
+  inv.styles=t.styles;
+  inv.iva=t.iva; inv.ivaAmt=t.ivaAmt;
+  inv.ship=t.ship; inv.shipTBD=t.shipTBD;
+  inv.stylesSub=t.stylesSub;
+  inv.totalFactory=t.totalFactory;
+  inv.totalClient=t.grand;
+  inv.profit=t.profit;
+  // Recompute amountDue based on invoice type, preserving deposit/balance halving
+  if(inv.invType==='deposit'||inv.invType==='balance'){ inv.amountDue=t.grand/2; }
+  else { inv.amountDue=t.grand; }
+  invs[idx]=inv;
+  saveClientInvoices(clientId,invs);
+  closeModal('quote-modal');
+  showToast('Invoice updated ✓');
+  await renderClientDetail(clientId);
+  const tab=document.querySelector('#client-content [onclick*="ct-invoices"]');
+  if(tab) switchTab(tab,'ct-invoices');
 }
 
 function openInvoiceCreator(clientId, preselectQuoteIdx) {
@@ -4290,6 +4479,25 @@ function themedChoice(title, msg, options){
 function resolveChoice(val){
   document.getElementById('choice-modal').classList.remove('open');
   if(_choiceResolve){ _choiceResolve(val); _choiceResolve=null; }
+}
+
+let _promptResolve = null;
+function themedPrompt(title, msg, placeholder){
+  return new Promise(resolve => {
+    _promptResolve = resolve;
+    document.getElementById('prompt-title').textContent = title || 'Enter value';
+    document.getElementById('prompt-msg').textContent = msg || '';
+    const inp = document.getElementById('prompt-input');
+    inp.value = ''; inp.placeholder = placeholder || '';
+    document.getElementById('prompt-modal').classList.add('open');
+    setTimeout(()=>inp.focus(), 50);
+  });
+}
+function resolvePrompt(ok){
+  const inp = document.getElementById('prompt-input');
+  const val = ok ? inp.value : null;
+  document.getElementById('prompt-modal').classList.remove('open');
+  if(_promptResolve){ _promptResolve(val); _promptResolve=null; }
 }
 function resolveConfirm(answer) {
   document.getElementById('confirm-modal').classList.remove('open');
