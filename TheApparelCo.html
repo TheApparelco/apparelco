@@ -6039,7 +6039,10 @@ async function deleteFactory(id){
   factories = factories.filter(x => String(x.id)!==String(id));
   lsSet('tac_factories', factories);
   if(driveConnected){
-    driveDelete('factory_'+id+'.json').catch(()=>{});
+    try {
+      await driveDeleteFile('factory_'+id+'.json');  // correct fn name; removes file AND updates fileIndex so it won't be re-synced back
+      await saveManifest();
+    } catch(e){ console.warn('Drive factory delete failed:', e); }
   }
   renderFactoriesList();
   renderSidebarClients();
