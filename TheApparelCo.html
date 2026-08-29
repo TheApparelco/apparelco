@@ -625,7 +625,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
             </select>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Client invoices stay in their own currency. Only the combined dashboard, metrics, and report totals are converted using daily exchange rates.</div>
-          <div class="field" style="margin-top:12px"><label>Commission invoice label</label><input id="co-commission-label" placeholder="Agent Fee" oninput="saveCompanyInfo()"><div style="font-size:11px;color:var(--text3);margin-top:3px">How your fee appears on invoices to factories (e.g. "Agent Fee", "Agency Commission", "Sourcing Fee").</div></div>
+          <div class="field" style="margin-top:12px"><label>Commission invoice label</label><input id="co-commission-label" placeholder="Agent Fee" oninput="syncCommissionLabel(this.value)"><div style="font-size:11px;color:var(--text3);margin-top:3px">How your fee appears on invoices to factories (e.g. "Agent Fee", "Agency Commission", "Sourcing Fee").</div></div>
         </div>
       </div>
       <div class="card">
@@ -682,6 +682,14 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
       </div>
       <div class="card">
+        <div class="card-header"><span class="card-title">Commission invoice settings</span><span style="font-size:11px;color:var(--text3)">For your Agent Fee invoices to factories</span></div>
+        <div class="card-body">
+          <div class="field"><label>Commission invoice label</label><input id="co-commission-label2" placeholder="Agent Fee" oninput="syncCommissionLabel(this.value)"><div style="font-size:11px;color:var(--text3);margin-top:3px">How your fee appears on invoices to factories (e.g. "Agent Fee", "Sourcing commission").</div></div>
+          <div class="field" style="margin-top:12px"><label>Commission payment terms</label><select id="co-commission-terms" onchange="saveCompanyInfo()"><option value="full">Full — one Agent Fee invoice per order</option><option value="split">50 / 50 — split into deposit + balance</option></select><div style="font-size:11px;color:var(--text3);margin-top:3px">Full is one invoice; 50/50 splits it to match the order's payment stages.</div></div>
+          <div class="field" style="margin-top:12px"><label>Commission invoice footer note</label><textarea id="co-commission-footer" placeholder="Footer text specific to Agent Fee invoices (leave blank to use the standard footer)" style="min-height:55px" oninput="saveCompanyInfo()"></textarea><div style="font-size:11px;color:var(--text3);margin-top:3px">Shown only on commission (Agent Fee) invoices. If blank, the standard footer is used.</div></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header"><span class="card-title">Default invoice settings</span><span style="font-size:11px;color:var(--text3)">Used when creating new invoices</span></div>
         <div class="card-body">
           <div class="grid3">
@@ -694,7 +702,6 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
             <div class="field"><label>Default shipping (€)</label><input id="co-inv-ship" type="number" value="200" oninput="saveCompanyInfo()"></div>
           </div>
           <div class="field"><label>Default payment terms</label><input id="co-inv-terms" value="50% deposit · 50% before dispatch" oninput="saveCompanyInfo()"></div>
-          <div class="field" style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border2)"><label>Commission invoice terms</label><select id="co-commission-terms" onchange="saveCompanyInfo()"><option value="full">Full — one Agent Fee invoice per order</option><option value="split">50 / 50 — split into deposit + balance</option></select><div style="font-size:11px;color:var(--text3);margin-top:3px">How your commission (Agent Fee) invoices to the factory are issued. Full is one invoice; 50/50 splits it to match the order's payment stages.</div></div>
         </div>
       </div>
       <div class="card">
@@ -2029,6 +2036,13 @@ function getClientShippingAddress(client){
   if(client.shipAddrMode==='diff' && client.shipAddr) return client.shipAddr;
   return [client.address, client.country].filter(Boolean).join(', ');
 }
+function syncCommissionLabel(val){
+  const a = document.getElementById('co-commission-label');
+  const b = document.getElementById('co-commission-label2');
+  if(a) a.value = val;
+  if(b) b.value = val;
+  saveCompanyInfo();
+}
 function toggleShipAddr(){
   const mode = document.getElementById('f-shipaddr-mode').value;
   const ta = document.getElementById('f-shipaddr');
@@ -3030,7 +3044,7 @@ function renderCoBrandedClientInvoice(clientId, idx){
     const rows = [];
     if(sd.gross) rows.push(['Gross weight', sd.gross]);
     if(sd.net) rows.push(['Net weight', sd.net]);
-    if(sd.cartons) rows.push(['Cartons / volumes', sd.cartons]);
+    if(sd.cartons) rows.push(['Packages', sd.cartons]);
     if(sd.deliverTo) rows.push(['Delivery to', sd.deliverTo]);
     (sd.custom||[]).forEach(f=>{ if(f.label||f.value) rows.push([f.label||'', f.value||'']); });
     if(rows.length){
@@ -3092,7 +3106,7 @@ function renderCoBrandedClientInvoice(clientId, idx){
     + '</div>'
     + shipDetailsHtml
     + bankBlock
-    + (co.invoiceFooter?'<div style="margin-top:16px;font-size:11px;color:#999;text-align:center">'+co.invoiceFooter+'</div>':'')
+    + (co.footer?'<div style="margin-top:16px;font-size:11px;color:#999;text-align:center">'+co.footer+'</div>':'')
     + '</div>';
 }
 function viewCoBrandedClientInvoice(clientId, idx){
@@ -3233,7 +3247,7 @@ function openFactoryInvoiceAdjust(){
     + '<div class="grid3" style="margin-bottom:6px">'
     + '<div class="field" style="margin:0"><label>Gross weight</label><input id="fa-gross" value="'+(p.shipDetails.gross||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 320 kg" oninput="saveFactoryShipDetail(\'gross\',this.value)"></div>'
     + '<div class="field" style="margin:0"><label>Net weight</label><input id="fa-net" value="'+(p.shipDetails.net||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 290 kg" oninput="saveFactoryShipDetail(\'net\',this.value)"></div>'
-    + '<div class="field" style="margin:0"><label>Cartons / volumes</label><input id="fa-cartons" value="'+(p.shipDetails.cartons||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 12 cartons" oninput="saveFactoryShipDetail(\'cartons\',this.value)"></div>'
+    + '<div class="field" style="margin:0"><label>Packages</label><input id="fa-cartons" value="'+(p.shipDetails.cartons||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 12 packages" oninput="saveFactoryShipDetail(\'cartons\',this.value)"></div>'
     + '</div>'
     + '<div class="field" style="margin-bottom:6px"><label>Delivery to</label><input id="fa-deliver" value="'+(p.shipDetails.deliverTo||'').replace(/"/g,'&quot;')+'" placeholder="Delivery address" oninput="saveFactoryShipDetail(\'deliverTo\',this.value)"></div>'
     + '<div id="fa-shipcustom">'+(p.shipDetails.custom||[]).map((f,i)=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input placeholder="Label (e.g. HS code)" value="'+(f.label||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryShipCustom('+i+',\'label\',this.value)" style="flex:1"><input placeholder="Value" value="'+(f.value||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryShipCustom('+i+',\'value\',this.value)" style="flex:1"><button class="btn btn-xs btn-danger" onclick="removeFactoryShipCustom('+i+')">✕</button></div>').join('')+'</div>'
@@ -3631,6 +3645,7 @@ function saveCompanyInfo() {
     reportingCurrency: get('co-reporting-currency') || 'EUR',
     commissionLabel: get('co-commission-label') || 'Agent Fee',
     commissionTerms: get('co-commission-terms') || 'full',
+    commissionFooter: get('co-commission-footer'),
     name: get('co-name'),
     email: get('co-email'),
     website: get('co-website'),
@@ -3669,6 +3684,8 @@ function loadCompanyInfo() {
     set('co-reporting-currency', info.reportingCurrency || 'EUR');
     set('co-commission-label', info.commissionLabel || 'Agent Fee');
     set('co-commission-terms', info.commissionTerms || 'full');
+    set('co-commission-label2', info.commissionLabel || 'Agent Fee');
+    set('co-commission-footer', info.commissionFooter || '');
     set('co-name', info.name);
     set('co-email', info.email);
     set('co-website', info.website);
@@ -3706,6 +3723,7 @@ function getCompanyInfo() {
     reportingCurrency: info.reportingCurrency || 'EUR',
     commissionLabel: info.commissionLabel || 'Agent Fee',
     commissionTerms: info.commissionTerms || 'full',
+    commissionFooter: info.commissionFooter || '',
     name:        info.name        || 'The Apparel Co',
     email:       info.email       || 'info@theapparelco.co',
     website:     info.website     || 'theapparelco.co',
@@ -3945,7 +3963,7 @@ function renderInvoiceDoc(clientId, idx) {
     '</div>' +
     getBankingHtml() + '<div class="inv-footer">' +
     (inv.isSample && inv.protoFee ? '<div style="margin-bottom:8px;padding:8px;background:#fff8eb;border-left:3px solid #c4a572;font-size:11px;color:#666"><strong>Prototype Development Fee Refund:</strong> The €'+inv.protoFee.toFixed(2)+' Prototype Development Fee is refundable if the client confirms bulk production within 60 days of sample approval. The fee will be credited against the bulk production deposit invoice.</div>' : '') +
-    'Payment terms: '+co.invTerms+'<br>'+co.footer+'</div>';
+    'Payment terms: '+co.invTerms+'<br>'+((inv.isCommission && co.commissionFooter) ? co.commissionFooter : co.footer)+'</div>';
 
   return buildDocHtml('Invoice ' + inv.number, inner);
 }
