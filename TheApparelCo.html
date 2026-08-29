@@ -3869,7 +3869,7 @@ function renderQuoteDoc(clientId, idx) {
   const logo = getLogoHtml(false);
 
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
-    '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
+    '<div>' + logo + '<div style="font-size:15px;font-weight:700;margin-bottom:2px">'+co.name+'</div>' + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.ein?'EIN: '+co.ein:'',co.vat?'VAT: '+co.vat:'',co.taxOther?co.taxOther:''].filter(Boolean).join('<br>') + '</div></div>' +
     '<div style="text-align:right">' + (q.isSample ? '<div style="display:inline-block;padding:3px 10px;background:#c4a572;color:#fff;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.1em;margin-bottom:6px">SAMPLE QUOTE</div>' : '') + '<div class="inv-number">QUOTE</div><div class="inv-meta"><strong>'+q.number+'</strong><br>'+fmtDate(q.date)+'<br>Valid until: '+fmtDate(q.validUntil)+'</div></div>' +
     '</div>' +
     '<hr class="inv-hr">' +
@@ -3931,7 +3931,7 @@ function renderInvoiceDoc(clientId, idx) {
   const typeLabel = inv.typeLabel || '';
   
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
-    '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
+    '<div>' + logo + '<div style="font-size:15px;font-weight:700;margin-bottom:2px">'+co.name+'</div>' + '<div class="inv-address">' + [(inv.isCommission?'':co.email),co.website,co.address,co.phone,co.ein?'EIN: '+co.ein:'',co.vat?'VAT: '+co.vat:'',co.taxOther?co.taxOther:''].filter(Boolean).join('<br>') + '</div></div>' +
     '<div style="text-align:right">' +
     (inv.isSample ? '<div style="display:inline-block;padding:3px 10px;background:#c4a572;color:#fff;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.1em;margin-bottom:6px">SAMPLE INVOICE</div>' : '') +
     (inv.isCommission ? '<div style="display:inline-block;padding:3px 10px;background:#2d6a4f;color:#fff;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.1em;margin-bottom:6px">COMMISSION INVOICE</div>' : '') +
@@ -4483,7 +4483,7 @@ function renderCurrentInvoiceDoc() {
   const logo = getLogoHtml(false);
 
   const inner = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">' +
-    '<div>' + logo + '<div class="inv-address">' + [co.email,co.website,co.address,co.phone,co.vat?'VAT: '+co.vat:''].filter(Boolean).join('<br>') + '</div></div>' +
+    '<div>' + logo + '<div style="font-size:15px;font-weight:700;margin-bottom:2px">'+co.name+'</div>' + '<div class="inv-address">' + [(inv.isCommission?'':co.email),co.website,co.address,co.phone,co.ein?'EIN: '+co.ein:'',co.vat?'VAT: '+co.vat:'',co.taxOther?co.taxOther:''].filter(Boolean).join('<br>') + '</div></div>' +
     '<div style="text-align:right"><div class="inv-number">'+num+'</div><div class="inv-meta">'+fmtDate(date)+'<br>Due: '+dueDateStr+'</div></div>' +
     '</div>' +
     '<hr class="inv-hr">' +
