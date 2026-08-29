@@ -3114,7 +3114,7 @@ function renderCoBrandedClientInvoice(clientId, idx){
     + (term==='balance'
         ? '<div style="display:flex;justify-content:space-between;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px"><span>Full order total</span><span>'+s+fullOrderWithExtras.toFixed(2)+'</span></div>'
           + (alreadyPaidOnOrder>0?'<div style="display:flex;justify-content:space-between;color:#2d6a4f"><span>Already paid (deposit)</span><span>-'+s+alreadyPaidOnOrder.toFixed(2)+'</span></div>':'')
-          + '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:4px;padding-top:6px;font-size:15px"><span>Balance now due</span><span>'+s+Math.max(0,(fullOrderWithExtras-alreadyPaidOnOrder)).toFixed(2)+'</span></div>'
+          + '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:4px;padding-top:6px;font-size:15px"><span>Balance now due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>'
         : (term==='deposit'
             ? '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>50% Deposit due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>'
             : '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>Total due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>'))
@@ -3355,10 +3355,10 @@ async function confirmFactoryInvoiceUpload(){
   let amountForTerm;
   if(term==='deposit'){ amountForTerm = goodsPortion/2; }
   else if(term==='balance'){
-    // Balance = full order total minus what the client already paid on this order (deposit etc.)
-    const fullOrder = goodsPortion + parts.ship;
-    const alreadyPaid = amountPaidOnOrder(clientId, q ? q.number : '', editingFactoryInvoice ? editingFactoryInvoice.invId : null);
-    amountForTerm = Math.max(0, fullOrder - alreadyPaid);
+    // Balance = the OTHER 50% of goods + the FULL shipping (never halved, never on deposit).
+    // This is a fixed portion, independent of when the deposit payment is recorded, so paying
+    // this amount correctly reads as fully paid.
+    amountForTerm = goodsPortion/2 + parts.ship;
   }
   else { amountForTerm = goodsPortion + parts.ship; }
   const inv = {
