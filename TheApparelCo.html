@@ -694,6 +694,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
             <div class="field"><label>Default shipping (€)</label><input id="co-inv-ship" type="number" value="200" oninput="saveCompanyInfo()"></div>
           </div>
           <div class="field"><label>Default payment terms</label><input id="co-inv-terms" value="50% deposit · 50% before dispatch" oninput="saveCompanyInfo()"></div>
+          <div class="field" style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border2)"><label>Commission invoice terms</label><select id="co-commission-terms" onchange="saveCompanyInfo()"><option value="full">Full — one Agent Fee invoice per order</option><option value="split">50 / 50 — split into deposit + balance</option></select><div style="font-size:11px;color:var(--text3);margin-top:3px">How your commission (Agent Fee) invoices to the factory are issued. Full is one invoice; 50/50 splits it to match the order's payment stages.</div></div>
         </div>
       </div>
       <div class="card">
@@ -793,7 +794,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="field"><label>Brand name *</label><input id="f-brand" placeholder="e.g. Studio Mara"></div>
   <div style="margin:6px 0 4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500">Contacts</label><button type="button" class="btn btn-xs btn-primary" onclick="addContact('client')">+ Add contact</button></div><div id="client-contacts-list"></div></div>
   <input type="hidden" id="f-contact"><input type="hidden" id="f-email"><input type="hidden" id="f-wa">
-  <div class="field"><label>Address</label><textarea id="f-address" style="min-height:50px"></textarea></div>
+  <div class="field"><label>Business address (fiscal)</label><textarea id="f-address" style="min-height:50px"></textarea></div>
+  <div class="field"><label>Shipping address</label>
+    <select id="f-shipaddr-mode" onchange="toggleShipAddr()" style="margin-bottom:6px"><option value="same">Same as business address</option><option value="diff">Different — enter manually</option></select>
+    <textarea id="f-shipaddr" style="min-height:44px;display:none" placeholder="Delivery address (if different from business address)"></textarea>
+  </div>
   <div class="grid3"><div class="field"><label>Country</label><input id="f-country"></div><div class="field">
     <label style="display:flex;align-items:center;gap:6px">
       <select id="f-taxtype" onchange="updateTaxLabel()" style="font-size:11px;padding:3px 6px;width:auto;border-radius:5px">
@@ -2008,11 +2013,27 @@ function openClientModal(id){
   const billSel = document.getElementById('f-billing');
   if(billSel) billSel.value = c?.billingType || 'standard';
   fillBankDetails('f', c?.bankDetails);
+  const _shipMode = document.getElementById('f-shipaddr-mode');
+  if(_shipMode){ _shipMode.value = c?.shipAddrMode || 'same'; }
+  const _shipTa = document.getElementById('f-shipaddr');
+  if(_shipTa){ _shipTa.value = c?.shipAddr || ''; }
+  toggleShipAddr();
   clientContactsDraft = c ? JSON.parse(JSON.stringify(ensureContactsArray(c, 'client'))) : [];
   renderContactRows('client');
   document.getElementById('client-modal').classList.add('open');
 }
 // Toggle bank fields between International (IBAN/SWIFT) and US (ACH/Wire)
+// Get the client's shipping/delivery address (manual if set, else the business address)
+function getClientShippingAddress(client){
+  if(!client) return '';
+  if(client.shipAddrMode==='diff' && client.shipAddr) return client.shipAddr;
+  return [client.address, client.country].filter(Boolean).join(', ');
+}
+function toggleShipAddr(){
+  const mode = document.getElementById('f-shipaddr-mode').value;
+  const ta = document.getElementById('f-shipaddr');
+  if(ta) ta.style.display = (mode==='diff') ? 'block' : 'none';
+}
 function toggleBankRegion(prefix){
   const region = document.getElementById(prefix+'-bank-region').value;
   const intl = document.getElementById(prefix+'-bank-intl');
@@ -2072,7 +2093,7 @@ async function saveClient(){
   if(!brand){await themedAlert('Brand name required','Please enter a brand name before saving.','⚠️');btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';return;}
   let c=editingId?clients.find(x=>String(x.id)===String(editingId)):{id:Date.now(),status:'active',fileIndex:{}};
   if(!c){btn.disabled=false;return;}
-  ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.bankDetails=readBankDetails('f');c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
+  ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.bankDetails=readBankDetails('f');c.shipAddrMode=document.getElementById('f-shipaddr-mode')?.value||'same';c.shipAddr=(c.shipAddrMode==='diff')?(document.getElementById('f-shipaddr')?.value.trim()||''):'';c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
   c.currency=document.getElementById('f-cur').value;
   c.commission=parseFloat(document.getElementById('f-commission').value)||20;
   c.factoryId=document.getElementById('f-factory')?.value||'';
@@ -3002,6 +3023,23 @@ function renderCoBrandedClientInvoice(clientId, idx){
   const fullOrderWithExtras = inv.totalClient || 0; // goods + shipping + extras (full order total)
   // Factory bank details block
   // Pull LIVE factory bank details (so edits to the factory reflect on the invoice), fall back to stored
+  // Shipping details block (gross/net weight, cartons, delivery to, custom fields)
+  let shipDetailsHtml = '';
+  if(inv.shipDetails){
+    const sd = inv.shipDetails;
+    const rows = [];
+    if(sd.gross) rows.push(['Gross weight', sd.gross]);
+    if(sd.net) rows.push(['Net weight', sd.net]);
+    if(sd.cartons) rows.push(['Cartons / volumes', sd.cartons]);
+    if(sd.deliverTo) rows.push(['Delivery to', sd.deliverTo]);
+    (sd.custom||[]).forEach(f=>{ if(f.label||f.value) rows.push([f.label||'', f.value||'']); });
+    if(rows.length){
+      shipDetailsHtml = '<div style="margin-top:14px;padding:12px;background:#f7f4ef;border-radius:6px;font-size:12px;line-height:1.7">'
+        + '<div style="font-weight:600;margin-bottom:4px">Shipping details</div>'
+        + rows.map(r=>'<div style="display:flex;justify-content:space-between"><span style="color:#666">'+r[0]+'</span><span>'+r[1]+'</span></div>').join('')
+        + '</div>';
+    }
+  }
   const _fobj = getFactory(inv.factoryId);
   let _bankHtml = '';
   if(_fobj && typeof _fobj.bankDetails==='object' && !bankDetailsIsEmpty(_fobj.bankDetails)){
@@ -3052,6 +3090,7 @@ function renderCoBrandedClientInvoice(clientId, idx){
             ? '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>50% Deposit due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>'
             : '<div style="display:flex;justify-content:space-between;font-weight:700;border-top:0.5px solid #ddd;margin-top:6px;padding-top:6px;font-size:15px"><span>Total due</span><span>'+s+amountDueForTerm.toFixed(2)+'</span></div>'))
     + '</div>'
+    + shipDetailsHtml
     + bankBlock
     + (co.invoiceFooter?'<div style="margin-top:16px;font-size:11px;color:#999;text-align:center">'+co.invoiceFooter+'</div>':'')
     + '</div>';
@@ -3081,13 +3120,16 @@ function downloadCoBrandedHTML(clientId, idx){
   URL.revokeObjectURL(a.href);
 }
 function printCoBrandedClientInvoice(clientId, idx){
-  const html = renderCoBrandedClientInvoice(clientId, idx);
-  if(typeof openForPrint==='function'){ openForPrint(html); }
-  else {
-    const w = window.open('', '_blank');
-    w.document.write('<html><head><title>Invoice</title></head><body onload="window.print()">'+html+'</body></html>');
-    w.document.close();
-  }
+  const inv = getClientInvoices(clientId)[idx];
+  const innerHtml = renderCoBrandedClientInvoice(clientId, idx);
+  // Wrap in a full document with an auto-print trigger (opens the print/Save-as-PDF dialog automatically)
+  const fullDoc = '<html><head><meta charset="utf-8"><title>Invoice '+(inv?inv.number:'')+'</title>'
+    + '<style>body{font-family:Inter,system-ui,-apple-system,sans-serif;margin:0;padding:20px;background:#fff}@media print{body{padding:0}}</style>'
+    + '</head><body>' + innerHtml
+    + '<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},400);};</scr'+'ipt>'
+    + '</body></html>';
+  openForPrint(fullDoc);
+  showToast('Tip: choose "Save as PDF" as the destination');
 }
 
 // Download/view the uploaded factory invoice file
@@ -3145,6 +3187,7 @@ function editFactoryInvoice(clientId, idx){
     iva: inv.iva||0,
     ship: inv.ship||0,
     shipLines: (inv.shipLines && inv.shipLines.length) ? inv.shipLines.map(l=>({desc:l.desc||'',amount:l.amount||''})) : (inv.ship?[{desc:'Shipping',amount:inv.ship}]:[]),
+    shipDetails: inv.shipDetails ? JSON.parse(JSON.stringify(inv.shipDetails)) : null,
     term: inv.factoryTerm||'full',
     _editing: true
   };
@@ -3154,6 +3197,13 @@ function openFactoryInvoiceAdjust(){
   const p = pendingFactoryUpload; if(!p) return;
   if(!p.shipLines) p.shipLines = [];
   if(!p.extraLines) p.extraLines = [];
+  if(!p.shipDetails){
+    // Pre-fill delivery address with the client's SHIPPING address (manual if set, else business address)
+    const _cl = p.c || clients.find(x=>String(x.id)===String(p.clientId));
+    const _addr = getClientShippingAddress(_cl);
+    p.shipDetails = { gross:'', net:'', cartons:'', deliverTo:_addr, custom:[] };
+  }
+  if(!p.shipDetails.custom) p.shipDetails.custom = [];
   const s = sym(p.q?.cur || p.c?.currency || 'EUR');
   const linesHtml = p.lines.map((ln,i)=>
     '<div class="style-block" style="margin-bottom:8px;padding:10px">'
@@ -3178,7 +3228,16 @@ function openFactoryInvoiceAdjust(){
     + '<div class="field" style="margin-bottom:10px"><label>IVA (%)</label><input id="fa-iva" type="number" value="'+(p.iva||0)+'" oninput="saveFactoryIva(this.value);recalcFactoryAdjust()"></div>'
     + '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Shipping</div>'
     + '<div id="fa-ships">'+shipHtml+'</div>'
-    + '<button class="btn btn-xs" onclick="addFactoryShip()" style="margin-bottom:14px">+ Add shipping line</button>'
+    + '<button class="btn btn-xs" onclick="addFactoryShip()" style="margin-bottom:12px">+ Add shipping line</button>'
+    + '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Shipping details (shown on invoice)</div>'
+    + '<div class="grid3" style="margin-bottom:6px">'
+    + '<div class="field" style="margin:0"><label>Gross weight</label><input id="fa-gross" value="'+(p.shipDetails.gross||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 320 kg" oninput="saveFactoryShipDetail(\'gross\',this.value)"></div>'
+    + '<div class="field" style="margin:0"><label>Net weight</label><input id="fa-net" value="'+(p.shipDetails.net||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 290 kg" oninput="saveFactoryShipDetail(\'net\',this.value)"></div>'
+    + '<div class="field" style="margin:0"><label>Cartons / volumes</label><input id="fa-cartons" value="'+(p.shipDetails.cartons||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 12 cartons" oninput="saveFactoryShipDetail(\'cartons\',this.value)"></div>'
+    + '</div>'
+    + '<div class="field" style="margin-bottom:6px"><label>Delivery to</label><input id="fa-deliver" value="'+(p.shipDetails.deliverTo||'').replace(/"/g,'&quot;')+'" placeholder="Delivery address" oninput="saveFactoryShipDetail(\'deliverTo\',this.value)"></div>'
+    + '<div id="fa-shipcustom">'+(p.shipDetails.custom||[]).map((f,i)=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input placeholder="Label (e.g. HS code)" value="'+(f.label||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryShipCustom('+i+',\'label\',this.value)" style="flex:1"><input placeholder="Value" value="'+(f.value||'').replace(/"/g,'&quot;')+'" oninput="updateFactoryShipCustom('+i+',\'value\',this.value)" style="flex:1"><button class="btn btn-xs btn-danger" onclick="removeFactoryShipCustom('+i+')">✕</button></div>').join('')+'</div>'
+    + '<button class="btn btn-xs" onclick="addFactoryShipCustom()" style="margin-bottom:14px">+ Add field</button>'
     + '<div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Extra lines (services: embroidery, printing, washing, labelling, etc.)</div>'
     + '<div id="fa-extras">'+extrasHtml+'</div>'
     + '<button class="btn btn-xs" onclick="addFactoryExtra()">+ Add extra line</button>'
@@ -3229,6 +3288,10 @@ function updateFactoryLine(i,field,val){
   const block = document.querySelectorAll('#fa-lines .style-block')[i];
   if(block){ const inps = block.querySelectorAll('input'); const s=sym(pendingFactoryUpload.q?.cur||'EUR'); if(inps[4]) inps[4].value = s+((ln.units||0)*(ln.price||0)).toFixed(2); }
 }
+function saveFactoryShipDetail(field,val){ if(pendingFactoryUpload){ if(!pendingFactoryUpload.shipDetails) pendingFactoryUpload.shipDetails={custom:[]}; pendingFactoryUpload.shipDetails[field]=val; } }
+function addFactoryShipCustom(){ if(!pendingFactoryUpload.shipDetails.custom) pendingFactoryUpload.shipDetails.custom=[]; pendingFactoryUpload.shipDetails.custom.push({label:'',value:''}); openFactoryInvoiceAdjust(); }
+function removeFactoryShipCustom(i){ pendingFactoryUpload.shipDetails.custom.splice(i,1); openFactoryInvoiceAdjust(); }
+function updateFactoryShipCustom(i,field,val){ if(pendingFactoryUpload.shipDetails.custom[i]){ pendingFactoryUpload.shipDetails.custom[i][field]=val; } }
 function addFactoryShip(){ if(!pendingFactoryUpload.shipLines) pendingFactoryUpload.shipLines=[]; pendingFactoryUpload.shipLines.push({desc:'',amount:''}); openFactoryInvoiceAdjust(); }
 function removeFactoryShip(i){ pendingFactoryUpload.shipLines.splice(i,1); openFactoryInvoiceAdjust(); }
 function updateFactoryShip(i,field,val){ if(pendingFactoryUpload.shipLines[i]){ pendingFactoryUpload.shipLines[i][field]=val; recalcFactoryAdjust(); } }
@@ -3272,6 +3335,7 @@ async function confirmFactoryInvoiceUpload(){
     shipLines: (p.shipLines||[]).filter(l=>l.desc||l.amount).map(l=>({desc:l.desc||'Shipping',amount:parseNum(l.amount,0)})),
     factoryExtras: (p.extraLines||[]).filter(l=>l.desc||l.amount).map(l=>({desc:l.desc||'Extra',amount:parseNum(l.amount,0)})),
     stylesSub: parts.sub,
+    shipDetails: p.shipDetails || null,
     totalClient: parts.total,       // full order total (all lines)
     factoryTerm: term,              // deposit / balance / full
     factoryTermLabel: termLabel,
@@ -3566,6 +3630,7 @@ function saveCompanyInfo() {
   const info = {
     reportingCurrency: get('co-reporting-currency') || 'EUR',
     commissionLabel: get('co-commission-label') || 'Agent Fee',
+    commissionTerms: get('co-commission-terms') || 'full',
     name: get('co-name'),
     email: get('co-email'),
     website: get('co-website'),
@@ -3603,6 +3668,7 @@ function loadCompanyInfo() {
   if (document.getElementById('co-name')) {
     set('co-reporting-currency', info.reportingCurrency || 'EUR');
     set('co-commission-label', info.commissionLabel || 'Agent Fee');
+    set('co-commission-terms', info.commissionTerms || 'full');
     set('co-name', info.name);
     set('co-email', info.email);
     set('co-website', info.website);
@@ -3639,6 +3705,7 @@ function getCompanyInfo() {
   return {
     reportingCurrency: info.reportingCurrency || 'EUR',
     commissionLabel: info.commissionLabel || 'Agent Fee',
+    commissionTerms: info.commissionTerms || 'full',
     name:        info.name        || 'The Apparel Co',
     email:       info.email       || 'info@theapparelco.co',
     website:     info.website     || 'theapparelco.co',
@@ -4189,12 +4256,21 @@ async function createCommissionInvoiceFromQuote(clientId, idx, passedType, skipT
   const q = getClientQuotes(clientId)[idx];
   if (!q) return;
   if (q.isSample) { themedAlert('Not applicable','Commission invoices apply to production orders, not samples.','ℹ️'); return; }
-  const invType = passedType || getSelectedInvoiceType();
+  const _companyInfo = getCompanyInfo();
+  const _commTerms = _companyInfo.commissionTerms || 'full';
+  // Commission invoice uses its OWN terms setting (Full or 50/50 split), not the order's deposit/balance term
+  let invType;
+  if(_commTerms === 'split'){
+    // 50/50: use the passed term (deposit/balance) so each half can be invoiced; default deposit if none
+    invType = (passedType === 'balance') ? 'balance' : 'deposit';
+  } else {
+    invType = 'full';
+  }
   const commissionTotal = q.profit || 0; // our commission = profit portion
   // Confirm before creating
-  const _label = getCompanyInfo().commissionLabel || 'Agent Fee';
-  const _splitTxt = invType === 'deposit' ? ' (50% deposit)' : invType === 'balance' ? ' (50% balance)' : '';
-  const _amt = invType === 'full' ? commissionTotal : commissionTotal / 2;
+  const _label = _companyInfo.commissionLabel || 'Agent Fee';
+  const _splitTxt = (_commTerms === 'split') ? (invType === 'deposit' ? ' (50% deposit)' : ' (50% balance)') : '';
+  const _amt = (_commTerms === 'split') ? commissionTotal / 2 : commissionTotal;
   const _factory = getFactory(c?.factoryId);
   const _confirmMsg = 'Create a '+_label+' invoice'+_splitTxt+' of '+sym(q.cur||c?.currency||'EUR')+_amt.toFixed(2)+(_factory?' to '+_factory.name:'')+' for '+(c?.brand||'this client')+' (order '+q.number+')?';
   const _okCreate = await themedConfirm('Create commission invoice?', _confirmMsg, 'Create invoice', '💰');
