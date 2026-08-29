@@ -2992,10 +2992,12 @@ function saveFactInvStatusToDrive(clientId, map){
 // so paying the balance in full correctly reads as paid even if the deposit was recorded later.
 function invoiceAmountDue(clientId, inv){
   if(!inv) return 0;
-  if(inv.isFactoryToClient && inv.factoryTerm==='balance'){
-    const fullOrder = inv.totalClient || 0;
-    const paidOnOrder = amountPaidOnOrder(clientId, inv.fromQuote, inv.id);
-    return Math.max(0, fullOrder - paidOnOrder);
+  // For factory deposit/balance invoices, the amount due is the term amount (the 50% portion),
+  // captured when the invoice was created. This is the amount the client pays for THIS invoice.
+  if(inv.isFactoryToClient && (inv.factoryTerm==='deposit' || inv.factoryTerm==='balance')){
+    if(inv.factoryTermAmount!=null) return inv.factoryTermAmount;
+    // Fallback for older records without a stored term amount: half the order
+    return (inv.totalClient||0) / 2;
   }
   return inv.amountDue!=null ? inv.amountDue : (inv.totalClient||0);
 }
