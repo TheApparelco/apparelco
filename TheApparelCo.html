@@ -812,6 +812,19 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <option value="factory-direct">Factory-direct — factory invoices the client, we invoice the factory for commission</option>
   </select><div style="font-size:11px;color:var(--text3);margin-top:3px">Determines how invoices work for this client. Can be changed later.</div></div>
   <div class="field"><label>Billing workflow</label><select id="f-billing"><option value="standard">Standard — we invoice the client &amp; pay the factory</option><option value="factory-direct">Factory-direct — factory invoices client, we invoice factory for commission</option></select></div>
+  <div style="margin-top:8px;padding-top:12px;border-top:0.5px solid var(--border2)">
+    <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Bank details (for your records — e.g. refunds)</div>
+    <div class="field"><label>Bank region</label><select id="f-bank-region" onchange="toggleBankRegion('f')"><option value="intl">International (IBAN / SWIFT)</option><option value="us">United States (ACH / Wire)</option></select></div>
+    <div class="grid2"><div class="field" style="margin:0"><label>Bank name</label><input id="f-bank-name"></div><div class="field" style="margin:0"><label>Account holder</label><input id="f-bank-holder"></div></div>
+    <div id="f-bank-intl">
+      <div class="grid2"><div class="field" style="margin:0"><label>IBAN</label><input id="f-bank-iban"></div><div class="field" style="margin:0"><label>SWIFT / BIC</label><input id="f-bank-swift"></div></div>
+    </div>
+    <div id="f-bank-us" style="display:none">
+      <div class="grid2"><div class="field" style="margin:0"><label>Routing number (ABA)</label><input id="f-bank-routing"></div><div class="field" style="margin:0"><label>Account number</label><input id="f-bank-account"></div></div>
+      <div class="field"><label>Account type</label><select id="f-bank-acctype"><option value="">—</option><option>Checking</option><option>Savings</option></select></div>
+    </div>
+    <div class="field"><label>Payment reference / notes</label><input id="f-bank-ref" placeholder="Optional"></div>
+  </div>
   <div class="field"><label>Notes</label><textarea id="f-notes" style="min-height:50px"></textarea></div>
   <div class="modal-actions"><button class="btn" onclick="closeModal('client-modal')">Cancel</button><button class="btn btn-primary" id="modal-save-btn" onclick="saveClient()">Save client</button></div>
 </div></div>
@@ -857,7 +870,20 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div class="field"><label>Currency</label><select id="ff-currency"><option value="EUR">EUR €</option><option value="GBP">GBP £</option><option value="USD">USD $</option></select></div>
     <div class="field"><label>Started working</label><input id="ff-startdate" type="date"></div>
   </div>
-  <div class="field"><label>Bank details</label><textarea id="ff-bank" style="min-height:46px" placeholder="Account holder, IBAN, SWIFT, etc."></textarea></div>
+  <div style="margin-top:4px;padding-top:10px;border-top:0.5px solid var(--border2)">
+    <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Bank details (shown on client invoices)</div>
+    <div class="field"><label>Bank region</label><select id="ff-bank-region" onchange="toggleBankRegion('ff')"><option value="intl">International (IBAN / SWIFT)</option><option value="us">United States (ACH / Wire)</option></select></div>
+    <div class="grid2"><div class="field" style="margin:0"><label>Bank name</label><input id="ff-bank-name"></div><div class="field" style="margin:0"><label>Account holder</label><input id="ff-bank-holder"></div></div>
+    <div id="ff-bank-intl">
+      <div class="grid2"><div class="field" style="margin:0"><label>IBAN</label><input id="ff-bank-iban"></div><div class="field" style="margin:0"><label>SWIFT / BIC</label><input id="ff-bank-swift"></div></div>
+    </div>
+    <div id="ff-bank-us" style="display:none">
+      <div class="grid2"><div class="field" style="margin:0"><label>Routing number (ABA)</label><input id="ff-bank-routing"></div><div class="field" style="margin:0"><label>Account number</label><input id="ff-bank-account"></div></div>
+      <div class="field"><label>Account type</label><select id="ff-bank-acctype"><option value="">—</option><option>Checking</option><option>Savings</option></select></div>
+    </div>
+    <div class="field"><label>Payment reference / notes</label><input id="ff-bank-ref" placeholder="Optional"></div>
+    <textarea id="ff-bank" style="display:none"></textarea>
+  </div>
 
   <div style="font-size:11px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.07em;font-weight:500;margin:14px 0 8px">Relationship</div>
   <div class="grid3">
@@ -1981,10 +2007,63 @@ function openClientModal(id){
   }
   const billSel = document.getElementById('f-billing');
   if(billSel) billSel.value = c?.billingType || 'standard';
+  fillBankDetails('f', c?.bankDetails);
   clientContactsDraft = c ? JSON.parse(JSON.stringify(ensureContactsArray(c, 'client'))) : [];
   renderContactRows('client');
   document.getElementById('client-modal').classList.add('open');
 }
+// Toggle bank fields between International (IBAN/SWIFT) and US (ACH/Wire)
+function toggleBankRegion(prefix){
+  const region = document.getElementById(prefix+'-bank-region').value;
+  const intl = document.getElementById(prefix+'-bank-intl');
+  const us = document.getElementById(prefix+'-bank-us');
+  if(intl) intl.style.display = region==='us' ? 'none' : 'block';
+  if(us) us.style.display = region==='us' ? 'block' : 'none';
+}
+// Read structured bank details from a modal (prefix 'f' for client, 'ff' for factory)
+function readBankDetails(prefix){
+  const g = id => { const el=document.getElementById(prefix+'-bank-'+id); return el ? el.value.trim() : ''; };
+  return {
+    region: g('region') || 'intl',
+    bankName: g('name'), holder: g('holder'),
+    iban: g('iban'), swift: g('swift'),
+    routing: g('routing'), account: g('account'), acctype: g('acctype'),
+    ref: g('ref')
+  };
+}
+// Populate structured bank fields into a modal
+function fillBankDetails(prefix, bank){
+  bank = bank || {};
+  const set = (id,v) => { const el=document.getElementById(prefix+'-bank-'+id); if(el) el.value = v||''; };
+  set('region', bank.region||'intl');
+  set('name', bank.bankName); set('holder', bank.holder);
+  set('iban', bank.iban); set('swift', bank.swift);
+  set('routing', bank.routing); set('account', bank.account); set('acctype', bank.acctype);
+  set('ref', bank.ref);
+  toggleBankRegion(prefix);
+}
+// Format bank details as clean HTML for invoices
+function formatBankDetailsHtml(bank){
+  if(!bank) return '';
+  const rows = [];
+  if(bank.bankName) rows.push('Bank: '+bank.bankName);
+  if(bank.holder) rows.push('Account holder: '+bank.holder);
+  if((bank.region||'intl')==='us'){
+    if(bank.routing) rows.push('Routing (ABA): '+bank.routing);
+    if(bank.account) rows.push('Account: '+bank.account);
+    if(bank.acctype) rows.push('Account type: '+bank.acctype);
+  } else {
+    if(bank.iban) rows.push('IBAN: '+bank.iban);
+    if(bank.swift) rows.push('SWIFT/BIC: '+bank.swift);
+  }
+  if(bank.ref) rows.push('Reference: '+bank.ref);
+  return rows.join('<br>');
+}
+function bankDetailsIsEmpty(bank){
+  if(!bank) return true;
+  return !(bank.bankName||bank.holder||bank.iban||bank.swift||bank.routing||bank.account||bank.ref);
+}
+
 async function saveClient(){
   const btn=document.getElementById('modal-save-btn');
   if(btn.disabled)return;
@@ -1993,7 +2072,7 @@ async function saveClient(){
   if(!brand){await themedAlert('Brand name required','Please enter a brand name before saving.','⚠️');btn.disabled=false;btn.textContent=editingId?'Save changes':'Save client';return;}
   let c=editingId?clients.find(x=>String(x.id)===String(editingId)):{id:Date.now(),status:'active',fileIndex:{}};
   if(!c){btn.disabled=false;return;}
-  ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
+  ['brand','contact','email','wa','address','country','garments','notes'].forEach(f=>{c[f]=document.getElementById('f-'+f).value.trim();});c.bankDetails=readBankDetails('f');c.vat=document.getElementById('f-vat').value.trim();c.taxType=document.getElementById('f-taxtype')?.value||'vat';
   c.currency=document.getElementById('f-cur').value;
   c.commission=parseFloat(document.getElementById('f-commission').value)||20;
   c.factoryId=document.getElementById('f-factory')?.value||'';
@@ -2922,11 +3001,21 @@ function renderCoBrandedClientInvoice(clientId, idx){
   const alreadyPaidOnOrder = (term==='balance') ? amountPaidOnOrder(clientId, inv.fromQuote, inv.id) : 0;
   const fullOrderWithExtras = inv.totalClient || 0; // goods + shipping + extras (full order total)
   // Factory bank details block
+  // Pull LIVE factory bank details (so edits to the factory reflect on the invoice), fall back to stored
+  const _fobj = getFactory(inv.factoryId);
+  let _bankHtml = '';
+  if(_fobj && typeof _fobj.bankDetails==='object' && !bankDetailsIsEmpty(_fobj.bankDetails)){
+    _bankHtml = formatBankDetailsHtml(_fobj.bankDetails);
+  } else if(_fobj && typeof _fobj.bankDetails==='string' && _fobj.bankDetails.trim()){
+    _bankHtml = _fobj.bankDetails.split('\n').join('<br>');
+  } else if(inv.factoryBankDetails){
+    _bankHtml = inv.factoryBankDetails.split('\n').join('<br>');
+  }
   let bankBlock = '';
-  if(inv.factoryBankDetails){
+  if(_bankHtml){
     bankBlock = '<div style="margin-top:14px;padding:12px;background:#f7f4ef;border-radius:6px;border-left:3px solid #c4a572;font-size:12px;line-height:1.7">'
       + '<div style="font-weight:600;margin-bottom:4px">Payment details</div>'
-      + inv.factoryBankDetails.split("\n").join("<br>")
+      + _bankHtml
       + '</div>';
   }
   const rows = (inv.styles||[]).map(g=>'<tr><td>'+g.desc+(g.sizes?' ('+g.sizes+')':'')+'</td><td style="text-align:right">'+(g.units||0)+'</td><td style="text-align:right">'+s+(g.ppu||0).toFixed(2)+'</td><td style="text-align:right">'+s+((g.units||0)*(g.ppu||0)).toFixed(2)+'</td></tr>').join('');
@@ -3189,7 +3278,7 @@ async function confirmFactoryInvoiceUpload(){
     factoryTermAmount: amountForTerm, // the portion due for this term
     // Co-branded generated invoice metadata
     coBrand: factory ? factory.name : '',
-    factoryBankDetails: factory ? (factory.bankDetails||'') : '',
+    factoryBankDetails: factory ? (typeof factory.bankDetails==='object' ? formatBankDetailsHtml(factory.bankDetails) : (factory.bankDetails||'')) : '',
     factoryId: c?.factoryId || '',
     amountDue: amountForTerm, amountPaid: 0, payments: [],  // tracks client→factory payment (excluded from OUR revenue)
     fileName: p.fileName, fileData: p.fileData,
@@ -5743,7 +5832,7 @@ function openFactoryModal(id){
   set('ff-payterms', f?.paymentTerms);
   set('ff-currency', f?.currency || 'EUR');
   set('ff-startdate', f?.startDate);
-  set('ff-bank', f?.bankDetails);
+  fillBankDetails('ff', (f && typeof f.bankDetails==='object') ? f.bankDetails : null);
   set('ff-status', f?.status || 'active');
   set('ff-rating', f?.rating || 0);
   set('ff-notes', f?.notes);
@@ -5789,7 +5878,7 @@ async function saveFactory(){
   f.certifications = get('ff-certs');
   f.paymentTerms = get('ff-payterms');
   f.currency = document.getElementById('ff-currency')?.value || 'EUR';
-  f.bankDetails = get('ff-bank');
+  f.bankDetails = readBankDetails('ff');
   f.rating = parseInt(document.getElementById('ff-rating')?.value || '0') || 0;
   f.startDate = get('ff-startdate');
   f.notes = get('ff-notes');
