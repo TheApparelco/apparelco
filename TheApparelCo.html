@@ -344,7 +344,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div class="titlebar-logo"><span style="font-family:var(--font-display);font-size:16px;color:var(--accent);letter-spacing:0.02em">The Apparel Co</span><span style="font-size:10px;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;margin-left:8px;font-weight:500;align-self:flex-end;padding-bottom:1px">Studio</span></div>
     <div class="titlebar-right">
       <div class="sync-pill" onclick="manualSync()" id="sync-pill"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">—</span></div>
-      <button class="btn btn-sm" onclick="downloadBackup()">⬇ Backup</button>
+      <button class="btn btn-sm" onclick="backupWithChoice()">⬇ Backup</button>
       <button class="btn btn-sm btn-ghost" onclick="showConnectScreen()">☁</button>
       <div style="display:flex;gap:2px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;border:0.5px solid var(--border)">
         <button class="theme-btn" onclick="setTheme('dark')" id="theme-dark" title="Dark" style="width:24px;height:24px;border-radius:4px;border:none;background:none;cursor:pointer;font-size:13px">🌙</button>
@@ -585,7 +585,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div id="workflow-report-output"></div>
     </div>
     <div class="panel" id="panel-settings">
-      <div class="panel-title">Settings</div>
+      <div class="panel-title">Settings <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">build 2026-11-13b</span></div>
       <div class="card">
         <div class="card-header"><span class="card-title">Company logo</span></div>
         <div class="card-body">
@@ -722,7 +722,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <div class="card-body">
           <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">All your data is automatically saved to Google Drive in real-time. You can also download a manual backup file to your computer as an extra safety net.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-            <button class="btn btn-primary btn-sm" onclick="downloadBackup()">⬇ Download backup now</button>
+            <div id="backup-status-line" style="font-size:11px;color:var(--text3);margin-bottom:8px;width:100%"></div><button class="btn btn-primary btn-sm" onclick="backupWithChoice()">⬇ Back up now</button><button class="btn btn-sm" onclick="downloadBackup()">💻 To this computer</button><button class="btn btn-sm" onclick="backupToDrive()">☁️ To Google Drive</button>
             <button class="btn btn-sm" onclick="manualSync()">⟳ Force sync with Drive</button>
           </div>
           <hr style="border:none;border-top:0.5px solid var(--border);margin:14px 0">
@@ -1267,12 +1267,44 @@ async function deleteClientData(id){
   }
 }
 async function saveChecksData(clientId,data){lsSet('checks_'+clientId,data);if(driveConnected){try{await driveUploadJSON('checks_'+clientId+'.json',data);}catch{queueForSync('checks_'+clientId+'.json');}}}
+// A local tick that has not been confirmed on Drive yet must never be overwritten
+// by the older copy still sitting on Drive. These helpers track that.
+let _checksSeq = 0;
+function markChecksDirty(clientId){
+  // Counter, not just a timestamp: two ticks inside the same millisecond would
+  // otherwise share a stamp, letting the first upload clear the second one's protection.
+  const stamp = String(Date.now()) + '-' + (++_checksSeq);
+  lsSet('checksdirty_'+clientId, stamp);
+  return stamp;
+}
+function checksAreDirty(clientId){ return !!lsGet('checksdirty_'+clientId, 0); }
+function clearChecksDirty(clientId, stamp){
+  // Only clear if no newer local change happened while the upload was in flight
+  if (String(lsGet('checksdirty_'+clientId, '')) === String(stamp)) {
+    try { localStorage.removeItem('checksdirty_'+clientId); } catch(e){}
+  }
+}
+
 async function loadChecksData(clientId){
   if (driveConnected) {
-    try { 
-      const d = await driveDownloadJSON('checks_'+clientId+'.json'); 
+    if (checksAreDirty(clientId)) {
+      // Local changes are newer than Drive — keep them and push them up instead
+      const localChecks = lsGet('checks_'+clientId, {});
+      const localDates  = lsGet('checkdates_'+clientId, {});
+      const stamp = lsGet('checksdirty_'+clientId, '');
+      driveUploadJSON('checks_'+clientId+'.json', localChecks)
+        .then(() => clearChecksDirty(clientId, stamp))
+        .catch(() => queueForSync('checks_'+clientId+'.json'));
+      driveUploadJSON('checkdates_'+clientId+'.json', localDates).catch(() => {});
+      return localChecks;
+    }
+    try {
+      const d = await driveDownloadJSON('checks_'+clientId+'.json');
+      // Re-check: a tick may have happened while we were downloading
+      if (checksAreDirty(clientId)) return lsGet('checks_'+clientId, {});
       if (d) { lsSet('checks_'+clientId, d); }
       const dates = await driveDownloadJSON('checkdates_'+clientId+'.json');
+      if (checksAreDirty(clientId)) return lsGet('checks_'+clientId, {});
       if (dates) lsSet('checkdates_'+clientId, dates);
       if (d) return d;
     } catch {}
@@ -1295,7 +1327,52 @@ async function manualSync(){if(!driveConnected){showToast('Not connected to Goog
 setInterval(async()=>{if(driveConnected&&lsGet('sync_queue',[]).length>0){try{await flushSyncQueue();setSyncStatus('synced');}catch{}}},60000);
 
 // BACKUP
-function downloadBackup(){
+
+// ===== BACKUP DESTINATION =====
+// Ask where the backup should go, then write it there.
+async function backupWithChoice(){
+  const opts = [
+    {label:'💻  Save to this computer', value:'computer'},
+    {label:'☁️  Save to Google Drive',  value:'drive'},
+    {label:'Both',                      value:'both'},
+    {label:'Cancel',                    value:'cancel'}
+  ];
+  const where = await themedChoice('Save backup', 'Where would you like this backup saved?', opts);
+  if(!where || where === 'cancel') return;
+  if(where === 'computer' || where === 'both') downloadBackup();
+  if(where === 'drive' || where === 'both') await backupToDrive();
+}
+
+// Write a timestamped backup file into the TheApparelCo folder on Drive
+async function backupToDrive(){
+  if(!driveConnected){
+    await themedAlert('Drive not connected', 'Connect Google Drive first, then try again. You can still save the backup to this computer.', '⚠️');
+    return;
+  }
+  try {
+    showToast('Saving backup to Drive…');
+    const data = buildBackupData();
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const name = 'backup-' + stamp + '.json';
+    await driveUploadJSON(name, data);
+    lsSet('tac_last_drive_backup', new Date().toISOString());
+    updateBackupStatusLine();
+    await themedAlert('Backup saved to Drive', 'Saved as ' + name + ' in your TheApparelCo folder on Google Drive.', '✓');
+  } catch(e){
+    await themedAlert('Could not save to Drive', String(e && e.message ? e.message : e) + '\n\nTry saving to this computer instead.', '⚠️');
+  }
+}
+
+function updateBackupStatusLine(){
+  const el = document.getElementById('backup-status-line');
+  if(!el) return;
+  const last = lsGet('tac_last_drive_backup', null);
+  el.textContent = last
+    ? 'Last Drive backup: ' + new Date(last).toLocaleString('en-GB')
+    : 'No manual Drive backup saved yet.';
+}
+const APP_BUILD = '2026-11-13b';  // shown in Settings so you can confirm what is deployed
+function buildBackupData(){
   const data = {
     exported: new Date().toISOString(),
     version: '2.1',
@@ -1327,6 +1404,11 @@ function downloadBackup(){
     data.factorypayments[c.id] = lsGet('factorypayments_'+c.id, []);
     data.factinvstatus[c.id] = lsGet('factinvstatus_'+c.id, {});
   });
+  return data;
+}
+
+function downloadBackup(){
+  const data = buildBackupData();
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1808,7 +1890,7 @@ function renderFactoryDetail(id){
   html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><span class="card-title">Financial & relationship</span></div><div class="card-body">';
   html += infoRow('Payment terms', f.paymentTerms);
   html += infoRow('Currency', f.currency);
-  html += infoRow('Bank details', f.bankDetails ? f.bankDetails.replace(/\n/g,'<br>') : '');
+  html += infoRow('Bank details', f.bankDetails ? (typeof f.bankDetails==='object' ? formatBankDetailsHtml(f.bankDetails) : String(f.bankDetails).replace(/\n/g,'<br>')) : '');
   html += infoRow('Rating', stars);
   html += infoRow('Working since', f.startDate ? fmtDate(f.startDate) : '');
   html += infoRow('Notes', f.notes);
@@ -2362,7 +2444,11 @@ function getStepKeyFromEl(el) {
   const cid = el.dataset.cid;
   const pi = parseInt(el.dataset.phase);
   const ii = parseInt(el.dataset.item);
-  const phase = PHASES[pi];
+  // Must use the SAME phase list the rows were rendered from. Factory-direct clients
+  // get different steps, so reading the global PHASES here mapped clicks to the wrong
+  // row (ticks landed on a neighbouring step, or vanished entirely).
+  const phases = getPhasesForClient(cid);
+  const phase = phases[pi];
   if (!phase) return null;
   const item = phase.items[ii];
   if (!item) return null;
@@ -2399,8 +2485,13 @@ async function editStepDate(clientId, key) {
   if (newDate === null) return;
   dates[key] = newDate;
   lsSet('checkdates_'+clientId, dates);
+  const _dstamp = markChecksDirty(clientId);
   if (driveConnected) {
-    driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
+    driveUploadJSON('checkdates_'+clientId+'.json', dates)
+      .then(() => clearChecksDirty(clientId, _dstamp))
+      .catch(() => {});
+  } else {
+    clearChecksDirty(clientId, _dstamp);
   }
   // Re-render workflow tab in place
   const checks = lsGet('checks_'+clientId, {});
@@ -2432,14 +2523,19 @@ async function toggleCheck(clientId, key) {
     delete dates[key];
   }
   
-  // Save to local instantly
+  // Save to local instantly, and flag it as not yet confirmed on Drive
   lsSet('checks_'+clientId, checks);
   lsSet('checkdates_'+clientId, dates);
+  const _stamp = markChecksDirty(clientId);
   
   // Save to Drive in background (non-blocking)
   if (driveConnected) {
-    driveUploadJSON('checks_'+clientId+'.json', checks).catch(() => queueForSync('checks_'+clientId+'.json'));
+    driveUploadJSON('checks_'+clientId+'.json', checks)
+      .then(() => clearChecksDirty(clientId, _stamp))
+      .catch(() => queueForSync('checks_'+clientId+'.json'));
     driveUploadJSON('checkdates_'+clientId+'.json', dates).catch(() => {});
+  } else {
+    clearChecksDirty(clientId, _stamp);
   }
   
   // Re-render the workflow tab content in place
